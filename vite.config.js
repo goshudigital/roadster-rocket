@@ -11,7 +11,7 @@ const PAGES = ['index', 'about', 'privacy', 'terms', 'contact'];
 function siteMeta(env) {
   const client = (env.VITE_ADSENSE_CLIENT || '').trim();
   const adsOn = /^ca-pub-\d{10,20}$/.test(client);
-  const siteUrl = (env.VITE_SITE_URL || 'https://roadster-rocket.vercel.app').replace(/\/$/, '');
+  const siteUrl = (env.VITE_SITE_URL || 'https://roadsterrocket.vercel.app').replace(/\/$/, '');
   const pages = ['/', '/about', '/privacy', '/terms', '/contact'];
 
   return {
