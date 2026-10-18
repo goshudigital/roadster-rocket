@@ -14,7 +14,15 @@ export class UI {
       air: $('air'),
       speedRing: $('speed-ring'),
       airRing: $('air-ring'),
+      alt: $('alt'),
+      altRing: $('alt-ring'),
       gaugeAir: document.querySelector('.gauge-air'),
+      attitude: $('attitude'),
+      attRear: $('att-rear'),
+      attSide: $('att-side'),
+      readLabel: $('read-label'),
+      readValue: $('read-value'),
+      readUnit: $('read-unit'),
       popups: $('popups'),
       hint: $('hint'),
       countdown: $('countdown'),
@@ -58,7 +66,7 @@ export class UI {
     el.style.strokeDasharray = `${(v * ARC).toFixed(1)} 314.2`;
   }
 
-  update({ score, chain, gems, mph, speed01, air, air01 }) {
+  update({ score, chain, gems, mph, speed01, air, air01, alt, alt01, attMode, att, attState, label, value, unit }) {
     this.text('score', this.el.score, score.toLocaleString('en-US'));
     const chainText = chain > 1 ? `×${chain}` : '';
     if (this.cache.chain !== chainText) {
@@ -68,12 +76,29 @@ export class UI {
     this.text('gems', this.el.gems, String(gems));
     this.text('speed', this.el.speed, String(mph));
     this.text('air', this.el.air, String(Math.round(air)));
+    this.text('alt', this.el.alt, alt < 99.95 ? alt.toFixed(1) : String(Math.round(alt)));
     this.ring('speedRing', this.el.speedRing, speed01);
     this.ring('airRing', this.el.airRing, air01);
+    this.ring('altRing', this.el.altRing, alt01);
     const low = air01 < 0.2;
     if (this.cache.low !== low) {
       this.cache.low = low;
       this.el.gaugeAir.classList.toggle('low', low);
+    }
+    // Telemetry readout + gyroscope, styled after the reveal livestream.
+    this.text('readLabel', this.el.readLabel, label);
+    this.text('readValue', this.el.readValue, value);
+    this.text('readUnit', this.el.readUnit, unit);
+    const cls = `attitude ${attMode === 'pitch' ? 'pitch' : ''} ${attState}`;
+    if (this.cache.attCls !== cls) {
+      this.cache.attCls = cls;
+      this.el.attitude.className = cls;
+    }
+    const deg = Math.round(att * 2) / 2;
+    const key = `${attMode}:${deg}`;
+    if (this.cache.att !== key) {
+      this.cache.att = key;
+      (attMode === 'pitch' ? this.el.attSide : this.el.attRear).style.rotate = `${-deg}deg`;
     }
   }
 

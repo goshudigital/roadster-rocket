@@ -6,7 +6,7 @@ const rand = (a, b) => a + Math.random() * (b - a);
 const pick = (arr) => arr[(Math.random() * arr.length) | 0];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-// Rows of vehicles parked nose-to-tail across the road, like the reveal's jump lineup.
+// Rows of vehicles parked nose-to-tail across the course, like the reveal's jump lineup.
 const ROWS = {
   semi: [['Semi', 0]],
   pods: [['Pod', -6.3], ['Pod', -2.0], ['Pod', 2.3], ['Pod', 6.6]],
@@ -14,7 +14,61 @@ const ROWS = {
   pickups: [['Pickup', -6.1], ['Pickup', 0], ['Pickup', 6.1]],
   mixed: [['Pod', -6.6], ['Sedan', -1.2], ['Pickup', 4.9]],
 };
-const INTRO = ['gems_line', 'lineup_jump', 'gems_snake', 'wall_thrust', 'suction_loop'];
+const INTRO = ['gems_line', 'lineup_jump', 'gems_snake', 'wall_thrust', 'lineup_jump'];
+
+/**
+ * "The Ramp" from the reveal: a concrete ribbon that curves up from the floor,
+ * runs vertical, then curls over the top to ~170° so the car hangs upside down
+ * about 20 m (≈67 ft) up, held only by suction.
+ */
+export const BIG_RAMP = {
+  R1: 9, // lower curve radius (floor to vertical)
+  V: 7, // vertical section
+  R2: 4.6, // curl radius over the top
+  CURL: (80 * Math.PI) / 180, // past vertical, ending at 170°
+  W: 6.6, // ribbon width
+  X: 7.4, // sits in the right lane of the course
+};
+export const BIG_RAMP_LEN = (BIG_RAMP.R1 * Math.PI) / 2 + BIG_RAMP.V + BIG_RAMP.R2 * BIG_RAMP.CURL;
+
+/** Point on the ramp at arc length u: f = metres forward of the base, y = height, th = pitch. */
+export function bigRampPoint(u, out = {}) {
+  const { R1, V, R2, CURL } = BIG_RAMP;
+  const a1 = (R1 * Math.PI) / 2;
+  if (u <= a1) {
+    const th = Math.max(0, u) / R1;
+    out.f = R1 * Math.sin(th);
+    out.y = R1 * (1 - Math.cos(th));
+    out.th = th;
+    return out;
+  }
+  u -= a1;
+  if (u <= V) {
+    out.f = R1;
+    out.y = R1 + u;
+    out.th = Math.PI / 2;
+    return out;
+  }
+  u -= V;
+  const p = Math.min(u / R2, CURL);
+  out.f = R1 - R2 + R2 * Math.cos(p);
+  out.y = R1 + V + R2 * Math.sin(p);
+  out.th = Math.PI / 2 + p;
+  return out;
+}
+
+class RampEdge extends THREE.Curve {
+  constructor(x) {
+    super();
+    this.x = x;
+    this.p = {};
+  }
+  getPoint(t, out = new THREE.Vector3()) {
+    const p = bigRampPoint(t * BIG_RAMP_LEN, this.p);
+    // Lift the edge tube slightly off the surface along the inward normal.
+    return out.set(this.x, p.y + Math.cos(p.th) * 0.08, -(p.f - Math.sin(p.th) * 0.08));
+  }
+}
 
 function canvasTex(w, h, draw, repeat) {
   const c = document.createElement('canvas');
@@ -30,28 +84,10 @@ function canvasTex(w, h, draw, repeat) {
   return t;
 }
 
-/** Lateral position of the loop's centre line: entry on the left, exit on the right. */
-export function loopX(a) {
-  return -LOOP_SHIFT / 2 + (LOOP_SHIFT * a) / (Math.PI * 2);
-}
-const LOOP_SHIFT = 10;
-const LOOP_W = 8.6;
-
-class LoopCurve extends THREE.Curve {
-  constructor(R, dx, a0, a1) {
-    super();
-    Object.assign(this, { R, dx, a0, a1 });
-  }
-  getPoint(t, out = new THREE.Vector3()) {
-    const a = this.a0 + (this.a1 - this.a0) * t;
-    return out.set(loopX(a) + this.dx, this.R * (1 - Math.cos(a)), -this.R * Math.sin(a));
-  }
-}
-
 /**
- * Spawns, scrolls and recycles everything on the road, and answers the
+ * Spawns, scrolls and recycles everything on the course, and answers the
  * physics questions: what surface is under the car, and did it hit something.
- * Positions along the road are "s" (metres from the start). An entity at s is
+ * Positions along the course are "s" (metres from the start). An entity at s is
  * drawn at z = dist - s, so the car (always at z = 0) sits at s = dist.
  */
 export class Track {
@@ -66,6 +102,7 @@ export class Track {
     this.makeTemplates(vehiclesRoot);
     this.makeShared();
     this._v = new THREE.Vector3();
+    this._p = {};
   }
 
   // ------------------------------------------------------------- assets --
@@ -128,23 +165,52 @@ export class Track {
     }, true);
     this.rampSideMat = new THREE.MeshStandardMaterial({ color: '#5a0710', roughness: 0.6 });
     this.lightRed = new THREE.MeshStandardMaterial({ color: '#220306', emissive: '#ff2236', emissiveIntensity: 3.5 });
+    this.neonRed = new THREE.MeshStandardMaterial({ color: '#2a0306', emissive: '#ff1f35', emissiveIntensity: 4.2 });
+    this.whiteDot = new THREE.MeshStandardMaterial({ color: '#222', emissive: '#ffffff', emissiveIntensity: 5 });
+    this.wallMat = new THREE.MeshStandardMaterial({ color: '#141519', roughness: 0.8, metalness: 0.2 });
+    this.paintMat = new THREE.MeshBasicMaterial({
+      color: '#b9bcc2',
+      transparent: true,
+      opacity: 0.85,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2,
+    });
 
-    this.loopTex = canvasTex(256, 512, (g, w, h) => {
-      g.fillStyle = '#202329';
+    // Concrete ramp surface: grey, panel seams, white centre line, dark edge bands.
+    this.rampConcrete = canvasTex(256, 512, (g, w, h) => {
+      g.fillStyle = '#8a8c90';
       g.fillRect(0, 0, w, h);
-      for (let i = 0; i < 2500; i++) {
-        const v = 28 + Math.random() * 25;
-        g.fillStyle = `rgb(${v},${v + 1},${v + 4})`;
+      for (let i = 0; i < 9000; i++) {
+        const v = 110 + Math.random() * 50;
+        g.fillStyle = `rgba(${v},${v + 1},${v + 3},0.35)`;
         g.fillRect(Math.random() * w, Math.random() * h, 2, 2);
       }
-      g.fillStyle = '#e9e9e9';
-      g.fillRect(w * 0.06, 0, 5, h);
-      g.fillRect(w * 0.94 - 5, 0, 5, h);
-      g.fillRect(w * 0.5 - 3, 0, 6, h * 0.5);
-      g.fillStyle = '#ff2236';
-      g.fillRect(0, 0, w * 0.035, h);
-      g.fillRect(w * 0.965, 0, w * 0.035, h);
+      g.fillStyle = 'rgba(40,42,46,0.35)';
+      for (let y = 0; y < h; y += 128) g.fillRect(0, y, w, 3);
+      g.fillStyle = '#f2f2f2';
+      g.fillRect(w / 2 - 4, 0, 8, h);
+      g.fillStyle = 'rgba(30,30,34,0.6)';
+      g.fillRect(0, 0, 10, h);
+      g.fillRect(w - 10, 0, 10, h);
     }, true);
+    this.curtainTex = canvasTex(256, 256, (g, w, h) => {
+      const grad = g.createLinearGradient(0, 0, w, 0);
+      for (let i = 0; i <= 16; i++) {
+        const t = i / 16;
+        const k = 0.45 + 0.55 * Math.abs(Math.sin(t * Math.PI * 4));
+        grad.addColorStop(t, `rgb(${Math.round(150 * k)},${Math.round(8 * k)},${Math.round(16 * k)})`);
+      }
+      g.fillStyle = grad;
+      g.fillRect(0, 0, w, h);
+      const v = g.createLinearGradient(0, 0, 0, h);
+      v.addColorStop(0, 'rgba(0,0,0,0.55)');
+      v.addColorStop(0.5, 'rgba(0,0,0,0)');
+      v.addColorStop(1, 'rgba(0,0,0,0.35)');
+      g.fillStyle = v;
+      g.fillRect(0, 0, w, h);
+    });
     this.frameMat = new THREE.MeshStandardMaterial({ color: '#30343c', metalness: 0.6, roughness: 0.45 });
     this.signTex = new Map();
   }
@@ -177,11 +243,16 @@ export class Track {
   reset() {
     for (const e of this.entities) this.release(e);
     this.entities.length = 0;
-    this.cursor = 70;
     this.patterns = 0;
     this.last = '';
-    this.lastLoop = -1e9;
     this.lastTank = 0;
+    this.nextNeon = 30;
+    this.nextMark = 120;
+    this.nextHaze = 60;
+    // The hero ramp right at the start, as on the reveal stage. Optional:
+    // stay in the right lane to ride it.
+    this.bigRamp(52);
+    this.cursor = 52 + BIG_RAMP.R1 + 45;
   }
 
   // --------------------------------------------------------- primitives --
@@ -282,6 +353,123 @@ export class Track {
     return g;
   }
 
+  /** The tall curl ramp from the reveal (see BIG_RAMP). */
+  bigRamp(s, x = BIG_RAMP.X) {
+    const obj = this.take('bigramp', () => this.buildBigRamp());
+    obj.position.set(x, 0, 0);
+    this.lastBigRamp = s;
+    // Diamonds riding up the face, collected on the climb.
+    for (let i = 1; i <= 5; i++) {
+      const p = bigRampPoint((BIG_RAMP_LEN * i) / 6.2, this._p);
+      const e = this.gem(x, 0, s);
+      e.obj.position.y = p.y + Math.cos(p.th) * 1.1;
+      e.local = -(p.f - Math.sin(p.th) * 1.1);
+      e.fixed = true;
+      e.end = s + BIG_RAMP.R1 + 4;
+    }
+    return this.add({ kind: 'bigramp', s, x, obj, used: false, end: s + BIG_RAMP.R1 + 8 });
+  }
+
+  buildBigRamp() {
+    const { R1, V, R2, W } = BIG_RAMP;
+    const g = new THREE.Group();
+    const seg = 160;
+    const pos = [];
+    const uv = [];
+    const idx = [];
+    const p = {};
+    for (let i = 0; i <= seg; i++) {
+      const u = (BIG_RAMP_LEN * i) / seg;
+      bigRampPoint(u, p);
+      pos.push(-W / 2, p.y, -p.f, W / 2, p.y, -p.f);
+      uv.push(0, u / 7, 1, u / 7);
+      if (i < seg) {
+        const k = i * 2;
+        idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2);
+      }
+    }
+    // Short apron so the ribbon meets the floor cleanly.
+    const ribbon = new THREE.BufferGeometry();
+    ribbon.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    ribbon.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    ribbon.setIndex(idx);
+    ribbon.computeVertexNormals();
+    const concrete = new THREE.MeshStandardMaterial({
+      map: this.rampConcrete,
+      emissive: '#ffffff',
+      emissiveMap: this.rampConcrete,
+      emissiveIntensity: 0.16,
+      roughness: 0.85,
+      side: THREE.DoubleSide,
+    });
+    g.add(new THREE.Mesh(ribbon, concrete));
+
+    // Red neon running up both edges.
+    for (const ex of [-W / 2 - 0.02, W / 2 + 0.02]) {
+      g.add(new THREE.Mesh(new THREE.TubeGeometry(new RampEdge(ex), 160, 0.07, 8, false), this.neonRed));
+    }
+
+    // Solid skirt under the lower curve (both sides) and its back wall.
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 0);
+    for (let i = 0; i <= 24; i++) {
+      bigRampPoint(((R1 * Math.PI) / 2) * (i / 24), p);
+      shape.lineTo(p.f, p.y);
+    }
+    shape.lineTo(R1, 0);
+    shape.lineTo(0, 0);
+    const skirtGeo = new THREE.ShapeGeometry(shape);
+    for (const sx of [-W / 2, W / 2]) {
+      const sk = new THREE.Mesh(skirtGeo, this.wallMat);
+      sk.rotation.y = Math.PI / 2; // shape's +x (forward f) -> world -z
+      sk.position.x = sx;
+      g.add(sk);
+    }
+
+    // Steel frame behind the vertical wall and the curl.
+    const top = R1 + V + R2 + 0.6;
+    const colGeo = new THREE.BoxGeometry(0.35, top, 0.35);
+    for (const fx of [R1 + 0.5, R1 + 3.4]) {
+      for (const sx of [-W / 2 + 0.2, W / 2 - 0.2]) {
+        const c = new THREE.Mesh(colGeo, this.frameMat);
+        c.position.set(sx, top / 2, -fx);
+        g.add(c);
+      }
+    }
+    for (let y = 1.5; y < top; y += 2.6) {
+      const a = new THREE.Mesh(new THREE.BoxGeometry(W - 0.2, 0.18, 0.18), this.frameMat);
+      a.position.set(0, y, -(R1 + 3.4));
+      g.add(a);
+      for (const sx of [-W / 2 + 0.2, W / 2 - 0.2]) {
+        const b = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 2.9), this.frameMat);
+        b.position.set(sx, y, -(R1 + 1.95));
+        g.add(b);
+        const d = new THREE.Mesh(new THREE.BoxGeometry(0.12, 3.9, 0.12), this.frameMat);
+        d.position.set(sx, y + 1.3, -(R1 + 1.95));
+        d.rotation.x = 0.85;
+        g.add(d);
+      }
+    }
+    // Beam under the curl tying it to the frame.
+    const lip = new THREE.Mesh(new THREE.BoxGeometry(W, 0.4, R2 + 3.4), this.frameMat);
+    lip.position.set(0, R1 + V + R2 + 0.5, -(R1 + 3.4 - (R2 + 3.4) / 2));
+    g.add(lip);
+    const beacon = new THREE.Mesh(new THREE.BoxGeometry(W, 0.1, 0.1), this.neonRed);
+    beacon.position.set(0, R1 + V + R2 + 0.75, -(R1 - R2));
+    g.add(beacon);
+
+    // Red stage curtains framing the base, as in the livestream shots.
+    const curtainMat = new THREE.MeshStandardMaterial({ map: this.curtainTex, emissive: '#ffffff', emissiveMap: this.curtainTex, emissiveIntensity: 0.55, roughness: 1, side: THREE.DoubleSide });
+    g.userData.curtains = [-1, 1].map((sx) => {
+      const c = new THREE.Mesh(new THREE.PlaneGeometry(9, 11), curtainMat);
+      c.position.set(sx * (W / 2 + 2.6), 5.5, -3.5);
+      c.rotation.y = sx * Math.PI / 2;
+      g.add(c);
+      return c;
+    });
+    return g;
+  }
+
   sign(text, s, side, color = '#ff3347') {
     const key = `sign:${text}`;
     const obj = this.take(key, () => {
@@ -314,73 +502,50 @@ export class Track {
       g.add(post, panel);
       return g;
     });
-    obj.position.set(side * 14.5, 0, 0);
+    obj.position.set(side * 15.5, 0, 0);
     obj.rotation.y = -side * 0.35;
     return this.add({ kind: 'sign', s, obj, end: s + 1 });
   }
 
-  loop(s) {
-    const R = PHYS.LOOP_R;
-    const obj = this.take('loop', () => this.buildLoop(R));
-    obj.position.set(0, 0, 0);
-    this.lastLoop = s;
-    return this.add({ kind: 'loop', s, R, obj, end: s + R + 4 });
+  smoke(s, x0, x1, rate = 9) {
+    return this.add({ kind: 'smoke', s, x0, x1, rate, obj: null, end: s + 4 });
   }
 
-  buildLoop(R) {
-    const W = LOOP_W;
-    const a0 = 0.06;
-    const a1 = Math.PI * 2 - 0.06;
-    const seg = 140;
-    const pos = [];
-    const uv = [];
-    const idx = [];
-    const circ = R * (a1 - a0);
-    for (let i = 0; i <= seg; i++) {
-      const a = a0 + ((a1 - a0) * i) / seg;
-      const y = R * (1 - Math.cos(a)) + 0.02;
-      const z = -R * Math.sin(a);
-      const xc = loopX(a);
-      pos.push(xc - W / 2, y, z, xc + W / 2, y, z);
-      const v = (circ * i) / seg / 12;
-      uv.push(0, v, 1, v);
-      if (i < seg) {
-        const k = i * 2;
-        idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2);
+  /** Low wall with a red LED strip and white dots, like the light bars lining the venue. */
+  neonWall(s, side) {
+    const obj = this.take('neon', () => {
+      const g = new THREE.Group();
+      const len = 26;
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.8, len), this.wallMat);
+      wall.position.y = 0.4;
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.09, len), this.neonRed);
+      strip.position.set(0, 0.62, 0);
+      g.add(wall, strip);
+      for (let z = -len / 2 + 1; z < len / 2; z += 2.2) {
+        const dot = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.08, 0.08), this.whiteDot);
+        dot.position.set(0, 0.42, z);
+        g.add(dot);
       }
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-    geo.setIndex(idx);
-    geo.computeVertexNormals();
-    const mat = new THREE.MeshStandardMaterial({ map: this.loopTex, roughness: 0.8, side: THREE.DoubleSide });
-    const g = new THREE.Group();
-    g.add(new THREE.Mesh(geo, mat));
-    for (const dx of [-W / 2, W / 2]) {
-      g.add(new THREE.Mesh(new THREE.TubeGeometry(new LoopCurve(R, dx, a0, a1), 140, 0.14, 8, false), this.lightRed));
-    }
-    // Gantry frame around the top of the loop.
-    const half = LOOP_SHIFT / 2 + W / 2 + 1.6;
-    for (const x of [-half, half]) {
-      const col = new THREE.Mesh(new THREE.BoxGeometry(0.8, 2 * R + 2, 0.8), this.frameMat);
-      col.position.set(x, R + 1, 0);
-      g.add(col);
-    }
-    const beam = new THREE.Mesh(new THREE.BoxGeometry(2 * half + 1, 0.8, 0.8), this.frameMat);
-    beam.position.set(0, 2 * R + 2, 0);
-    g.add(beam);
-    const strut = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.6, 0.4), this.frameMat);
-    strut.position.set(0, 2 * R + 1.2, 0);
-    g.add(strut);
-    const beacon = new THREE.Mesh(new THREE.BoxGeometry(2 * half, 0.12, 0.12), this.lightRed);
-    beacon.position.set(0, 2 * R + 2.45, 0);
-    g.add(beacon);
-    return g;
+      return g;
+    });
+    obj.position.set(side * 17, 0, 0);
+    // Strip faces the course.
+    obj.children[1].position.x = -side * 0.22;
+    for (let i = 2; i < obj.children.length; i++) obj.children[i].position.x = -side * 0.22;
+    return this.add({ kind: 'neon', s, obj, end: s + 14 });
   }
 
-  smoke(s, x0, x1) {
-    return this.add({ kind: 'smoke', s, x0, x1, obj: null, end: s + 4 });
+  /** Painted pad markings: long cross lines like the test site apron. */
+  marking(s) {
+    const diag = Math.random() < 0.5;
+    const obj = this.take(diag ? 'mark:d' : 'mark:x', () => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 70), this.paintMat);
+      m.rotation.x = -Math.PI / 2;
+      return m;
+    });
+    obj.position.set(0, 0.014, 0);
+    obj.rotation.z = diag ? 0.62 * (Math.random() < 0.5 ? 1 : -1) : Math.PI / 2;
+    return this.add({ kind: 'mark', s, obj, end: s + 40 });
   }
 
   // ------------------------------------------------------------ patterns --
@@ -399,6 +564,20 @@ export class Track {
       this.last = name;
       this.patterns++;
     }
+    // Venue dressing, independent of the gameplay patterns.
+    while (this.nextNeon < dist + 950) {
+      this.neonWall(this.nextNeon, Math.random() < 0.5 ? -1 : 1);
+      this.nextNeon += 110 + rand(0, 70);
+    }
+    while (this.nextMark < dist + 950) {
+      this.marking(this.nextMark);
+      this.nextMark += 180 + rand(0, 120);
+    }
+    while (this.nextHaze < dist + 950) {
+      const side = Math.random() < 0.5 ? -1 : 1;
+      this.smoke(this.nextHaze, side * 13, side * 24, 3);
+      this.nextHaze += 140 + rand(0, 80);
+    }
   }
 
   choosePattern() {
@@ -408,13 +587,13 @@ export class Track {
       gems_line: 2.5,
       gems_snake: 2,
       barrier_slalom: 2 + 2 * d,
-      lineup_jump: 3,
+      lineup_jump: 3.2,
       parked_weave: d > 0.04 ? 2 + 2 * d : 0,
       air_gems: 1.5,
       wall_thrust: d > 0.12 ? 1.4 + d : 0,
-      suction_loop: this.cursor - this.lastLoop > 700 ? 1.6 : 0,
-      roof_run: d > 0.08 ? 1.3 : 0,
-      ramp_lane: 1.6,
+      the_ramp: this.cursor - this.lastBigRamp > 1100 ? 1.8 : 0,
+      roof_run: d > 0.08 ? 1.2 : 0,
+      ramp_lane: 1.5,
       lineup_thrust: d > 0.4 ? 1 + d : 0,
     };
     w[this.last] = 0;
@@ -488,14 +667,28 @@ export class Track {
     }
   }
 
+  /** Red light strip on the floor in front of a lineup, as at the jump demo. */
+  floorLights(s) {
+    const obj = this.take('floorlights', () => {
+      const g = new THREE.Group();
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(21, 0.06, 0.18), this.neonRed);
+      bar.position.y = 0.03;
+      g.add(bar);
+      return g;
+    });
+    obj.position.set(0, 0, 0);
+    return this.add({ kind: 'floor', s, obj, end: s + 1 });
+  }
+
   lineup_jump(s) {
     const r = this.ramp(0, 20, s, 12, 2.8);
     const start = s + 12 + 15;
     const rows = this.lineupRows(3 + Math.round(this.d * 2));
+    this.floorLights(start - 3);
     const depth = this.placeRows(rows, start);
     this.smoke(start + depth / 2, -10, 10);
     this.arcGems(s + 12, r);
-    return 12 + 15 + depth + 30;
+    return 12 + 15 + depth + 34;
   }
 
   parked_weave(s) {
@@ -537,25 +730,11 @@ export class Track {
     return 20 + (walls - 1) * step;
   }
 
-  suction_loop(s) {
-    this.sign('SUCTION LOOP', s - 110, -1, '#62f4ff');
-    this.sign('KEEP LEFT', s - 110, 1, '#62f4ff');
-    const R = PHYS.LOOP_R;
-    const entry = s + R + 14;
-    // Funnel: the loop's exit ramp occupies the right half, so block it.
-    for (const x of [1.6, 4.6, 7.6]) this.barrier(x, entry - R - 8).funnel = true;
-    for (let i = 0; i < 6; i++) this.gem(-5, 1.0, entry - R - 50 + i * 7);
-    this.loop(entry);
-    // Diamonds around the inside of the loop, collected while upside down.
-    for (let i = 1; i <= 10; i++) {
-      const a = (i / 11) * Math.PI * 2;
-      const e = this.gem(loopX(a), 0, entry);
-      e.obj.position.y = R * (1 - Math.cos(a)) + Math.cos(a) * 1.1;
-      e.local = -R * Math.sin(a) + Math.sin(a) * 1.1;
-      e.loopGem = true;
-      e.end = entry + R + 2;
-    }
-    return R + 14 + R + 40;
+  the_ramp(s) {
+    this.sign('THE RAMP  →', s - 110, 1, '#ff3347');
+    for (let i = 0; i < 6; i++) this.gem(BIG_RAMP.X, 1.0, s - 52 + i * 7);
+    this.bigRamp(s + 10);
+    return 10 + BIG_RAMP.R1 + 45;
   }
 
   roof_run(s) {
@@ -583,6 +762,7 @@ export class Track {
 
   lineup_thrust(s) {
     this.sign('THRUST ↑', s - 85, 1);
+    this.floorLights(s - 3);
     const depth = this.placeRows([pick(['pods', 'sedans'])], s);
     for (const x of [-6, 0, 6]) this.gem(x, 3.2, s + depth / 2);
     return depth + 15;
@@ -604,7 +784,7 @@ export class Track {
       e.obj.position.z = dist - e.s + (e.local || 0);
       if (e.kind === 'gem') {
         e.obj.rotation.y += dt * 3;
-        if (!e.loopGem) e.obj.position.y = e.y + Math.sin(time * 3 + e.s) * 0.12;
+        if (!e.fixed) e.obj.position.y = e.y + Math.sin(time * 3 + e.s) * 0.12;
       } else if (e.kind === 'tank') {
         e.obj.rotation.y += dt * 1.5;
         e.obj.position.y = e.y + Math.sin(time * 2.4 + e.s) * 0.2;
@@ -617,11 +797,9 @@ export class Track {
       if (e.kind !== 'smoke') continue;
       const ahead = e.s - dist;
       if (ahead < -20 || ahead > 320) continue;
-      const n = Math.random() < dt * 9 ? 1 : 0;
-      for (let k = 0; k < n; k++) {
-        const x = rand(e.x0, e.x1);
-        this.fx.smoke.spawn(x, rand(0.2, 1.5), dist - e.s + rand(-4, 4), rand(-0.5, 0.5), rand(0.4, 1.2), 0, rand(4, 7), 4, 11, 0.75, 0.78, 0.84, 0.32, 0.1, 0.05);
-      }
+      if (Math.random() >= dt * e.rate) continue;
+      const x = rand(e.x0, e.x1);
+      this.fx.smoke.spawn(x, rand(0.2, 1.5), dist - e.s + rand(-4, 4), rand(-0.5, 0.5), rand(0.4, 1.2), 0, rand(4, 7), 4, 11, 0.75, 0.78, 0.84, 0.3, 0.1, 0.05);
     }
   }
 
@@ -649,9 +827,16 @@ export class Track {
     return out;
   }
 
-  /** Solid obstacle the car body is intersecting, if any. */
-  hit(x, s, y) {
+  /** Solid obstacle the car body is intersecting, if any (skipping `ignore`). */
+  hit(x, s, y, ignore = null) {
     for (const e of this.entities) {
+      if (e === ignore) continue;
+      if (e.kind === 'bigramp') {
+        // The tower itself: from just past its base to the back of the frame.
+        const f = s - e.s;
+        if (f > 1 && f < BIG_RAMP.R1 + 4.5 && Math.abs(x - e.x) < BIG_RAMP.W / 2 + PHYS.CAR_HX && y < 21) return e;
+        continue;
+      }
       if (!e.solid) continue;
       if (Math.abs(x - e.x) < e.hx + PHYS.CAR_HX && Math.abs(s - e.s) < e.hz + PHYS.CAR_HZ && y < e.h - PHYS.STEP) return e;
     }
@@ -700,14 +885,17 @@ export class Track {
     for (const e of this.entities) {
       if (e.kind !== kind) continue;
       const ahead = e.s - dist;
-      if (ahead > 0 && ahead < range && (!wallsOnly || (Math.abs(e.x) < 2 && !e.funnel))) return e;
+      if (ahead > 0 && ahead < range && (!wallsOnly || Math.abs(e.x) < 2)) return e;
     }
     return null;
   }
 
-  /** A loop whose entry the car just crossed. */
-  loopAt(prevS, s) {
-    for (const e of this.entities) if (e.kind === 'loop' && prevS < e.s && s >= e.s) return e;
+  /** The big ramp whose base the car just reached in its lane (if any). */
+  bigRampAt(prevS, s, x) {
+    for (const e of this.entities) {
+      if (e.kind !== 'bigramp' || e.used) continue;
+      if (prevS < e.s && s >= e.s && Math.abs(x - e.x) < BIG_RAMP.W / 2 + PHYS.CAR_HX) return e;
+    }
     return null;
   }
 
@@ -716,7 +904,7 @@ export class Track {
     const list = this.entities;
     for (let i = 0; i < list.length; i++) {
       const e = list[i];
-      if (e.s > dist - 5 && e.s < dist + len && e.kind !== 'sign') {
+      if (e.s > dist - 5 && e.s < dist + len && e.kind !== 'sign' && e.kind !== 'neon' && e.kind !== 'mark') {
         this.release(e);
         list[i] = list[list.length - 1];
         list.pop();

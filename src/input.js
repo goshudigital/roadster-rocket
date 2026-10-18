@@ -8,17 +8,15 @@ const GAME_KEYS = new Set([...LEFT, ...RIGHT, ...THRUST, ...FLIP, 'KeyP', 'Escap
 export class Input {
   constructor(touchRoot) {
     this.keys = new Set();
-    this.touch = { left: false, right: false, thrust: false };
+    this.touch = { left: false, right: false, thrust: false, flip: false };
     this.capture = false; // when true, game keys don't scroll the page
     this.onPress = null; // (code) => void, fired once per key press
-    this.flipQueued = false;
 
     window.addEventListener('keydown', (e) => {
       if (e.target instanceof HTMLElement && e.target.closest('input, textarea, select')) return;
       if (this.capture && GAME_KEYS.has(e.code)) e.preventDefault();
       if (e.repeat) return;
       this.keys.add(e.code);
-      if (FLIP.includes(e.code)) this.flipQueued = true;
       this.onPress?.(e.code, e);
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
@@ -31,13 +29,12 @@ export class Input {
         e.preventDefault();
         btn.setPointerCapture?.(e.pointerId);
         btn.classList.add('on');
-        if (act === 'flip') this.flipQueued = true;
-        else this.touch[act] = true;
+        this.touch[act] = true;
       };
       const up = (e) => {
         e.preventDefault();
         btn.classList.remove('on');
-        if (act !== 'flip') this.touch[act] = false;
+        this.touch[act] = false;
       };
       btn.addEventListener('pointerdown', down);
       btn.addEventListener('pointerup', up);
@@ -51,6 +48,7 @@ export class Input {
     return list.some((k) => this.keys.has(k));
   }
 
+  /** -1 (left) .. 1 (right). Steers on the ground, balances the roll in the air. */
   get steer() {
     const l = this.has(LEFT) || this.touch.left;
     const r = this.has(RIGHT) || this.touch.right;
@@ -61,16 +59,13 @@ export class Input {
     return this.has(THRUST) || this.touch.thrust;
   }
 
-  /** Returns true once per flip press. */
-  takeFlip() {
-    const f = this.flipQueued;
-    this.flipQueued = false;
-    return f;
+  /** Held: keeps the kick flip spinning. */
+  get flip() {
+    return this.has(FLIP) || this.touch.flip;
   }
 
   reset() {
     this.keys.clear();
-    this.touch.left = this.touch.right = this.touch.thrust = false;
-    this.flipQueued = false;
+    this.touch.left = this.touch.right = this.touch.thrust = this.touch.flip = false;
   }
 }

@@ -1,7 +1,7 @@
 /** Tuning shared by the car physics and the track generator (metres, seconds). */
 export const PHYS = {
-  G: 30, // gravity
-  THRUST: 54, // upward acceleration from the down-facing thrusters
+  G: 24, // gravity (arcade: floaty enough to kick-flip and balance)
+  THRUST: 46, // upward acceleration from the down-facing thrusters
   MAX_VY: 13,
   CEILING: 15, // thrust fades out approaching this height
   AIR_MAX: 600, // litres, as on the real car
@@ -11,15 +11,13 @@ export const PHYS = {
   LAT_GROUND: 17,
   LAT_AIR: 12,
   X_LIMIT: 9.2,
-  FLIP_TIME: 0.6,
   STEP: 0.45, // how far the car can step up onto a surface
   CAR_HX: 0.92,
   CAR_HZ: 2.15,
-  LOOP_R: 13,
 };
 
 export function launchVy(speed, ramp) {
-  return speed * (ramp.H / ramp.L) * 1.05 + 1.5;
+  return speed * (ramp.H / ramp.L) * 1.3 + 3;
 }
 
 /** Cruise speed for a given distance: ~100 mph at launch up to ~250 mph. */

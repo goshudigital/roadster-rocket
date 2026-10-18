@@ -4,17 +4,30 @@ import { Car, PAINTS, paintSwatch } from './car.js';
 import { makeDotTexture, makePuffTexture, Particles, SpeedLines } from './fx.js';
 import { cruiseSpeed, launchVy, PHYS } from './physics.js';
 import { persist, save } from './storage.js';
-import { loopX, Track } from './track.js';
+import { BIG_RAMP_LEN, bigRampPoint, Track } from './track.js';
 import { UI } from './ui.js';
 import { World } from './world.js';
 
 const TAU = Math.PI * 2;
+const DEG = 180 / Math.PI;
 const MPH = 2.23694;
+const FT = 3.28084;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const damp = (a, b, k, dt) => a + (b - a) * (1 - Math.exp(-k * dt));
 const rand = (a, b) => a + Math.random() * (b - a);
+const wrapPi = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const $ = (id) => document.getElementById(id);
 const VEHICLE_NAMES = { Semi: 'a semi truck', Pickup: 'a pickup', Sedan: 'a parked car', Pod: 'a robotaxi' };
+
+/**
+ * Air control. The car keeps spinning once it rolls (momentum), gusts nudge
+ * it, and level is an unstable balance point, so you have to fly it: hold FLIP
+ * to kick-flip to the left like the reveal, use left/right thrusters to stop
+ * the spin and hold it level for the landing.
+ */
+const AIRCTL = { FLIP_TQ: 24, BAL_TQ: 20, DAMP: 0.5, INSTAB: 0.8, GUST: 1.0, MAX_RATE: 8.5 };
+/** Landing tolerance (degrees off level). Beyond SKETCHY the car rolls over. */
+const GRADE = { PERFECT: 10, CLEAN: 28, SKETCHY: 50 };
 
 export class Game {
   constructor(engine, assets, sound, input) {
@@ -46,6 +59,7 @@ export class Game {
     this.look = new THREE.Vector3(0, 0.8, -1);
     this._surf = { h: 0, ramp: null, roof: null };
     this._surf2 = { h: 0, ramp: null, roof: null };
+    this._p = {};
     this._v = new THREE.Vector3();
     this._d = new THREE.Vector3();
     this._c = new THREE.Vector3();
@@ -84,12 +98,14 @@ export class Game {
   newRun() {
     this.run = {
       x: 0, y: 0, vx: 0, vy: 0, speed: 0, odo: 0, air: PHYS.AIR_MAX,
-      grounded: true, onRamp: null, airtime: 0,
-      flip: null, flipQueued: false, flips: [], flipDoneAt: -1, sketchy: false,
-      pitch: 0, bank: 0, yaw: 0,
+      grounded: true, onRamp: null, airtime: 0, steerIn: 0,
+      roll: 0, rollRate: 0, rollTotal: 0, playerTorque: 0, gust: 0, gustTarget: 0, gustT: 0,
+      flipsAir: 0, bounced: false,
+      pitch: 0, bank: 0, yaw: 0, ridePitch: 0,
+      ride: null, drop: null, autoX: null,
       launch: 0, sixty: false, bonus: 0, gems: 0, gemsBanked: 0, gemT: 0, gemChain: 0,
       stunts: 0, chain: 0, chainTimer: 0, topSpeed: 0,
-      loop: null, invuln: 0, revived: false, counted: false,
+      invuln: 0, revived: false, counted: false,
       crashT: 0, spin: new THREE.Vector3(), reason: '',
       thrusting: false, lowWarned: false, hintT: 0, roofs: new Set(),
       countT: 0, countN: 4, puffT: 0,
@@ -246,9 +262,10 @@ export class Game {
   openGarage(from) {
     this.garageFrom = from;
     this.state = 'garage';
-    this.resetCarPose();
     this.run.x = 0;
     this.run.y = 0;
+    this.run.ride = this.run.drop = null;
+    this.resetCarPose();
     this.ui.hud(false);
     this.ui.show('garage');
     this.input.capture = false;
@@ -325,7 +342,7 @@ export class Game {
 
   async share() {
     const score = this.score().toLocaleString('en-US');
-    const text = `I scored ${score} in Roadster Rocket 🚀 Jump the semi, ride the loop upside down. Can you beat it?`;
+    const text = `I scored ${score} in Roadster Rocket 🚀 Kick-flipped over the semi and hung upside down on The Ramp. Can you beat it?`;
     const url = `${location.origin}/`;
     try {
       if (navigator.share) {
@@ -356,6 +373,7 @@ export class Game {
     car.root.rotation.set(0, 0, 0);
     car.pivot.rotation.set(0, 0, 0);
     car.root.visible = true;
+    car.setJets({}, this.time);
   }
 
   score() {
@@ -375,24 +393,31 @@ export class Game {
     else if (s === 'playing') this.updatePlaying(dt);
     else if (s === 'crash' || s === 'over') this.updateCrash(dt);
 
+    const c = this.run;
+    const stunt = c.ride || c.drop;
+    // The wide shot looks across the ramp from the left: drop that curtain while it runs.
+    const curtain = stunt && s !== 'over' ? stunt.e.obj.userData.curtains?.[0] : null;
+    if (curtain !== this.hiddenCurtain) {
+      if (this.hiddenCurtain) this.hiddenCurtain.visible = true;
+      if (curtain) curtain.visible = false;
+      this.hiddenCurtain = curtain;
+    }
     if (s !== 'paused') {
       const scroll = this.dist - prevDist;
       this.fx.smoke.update(dt, scroll);
       this.fx.glow.update(dt, scroll);
       this.track.update(dt, this.dist, this.time);
       if (s === 'playing' || s === 'countdown' || s === 'title') this.track.emitSmoke(dt, this.dist);
-      this.world.update(dt, this.dist, this.car, this.camera, s === 'playing', this.run.loop ? this.run.loop.e.obj.position.z : null);
-      const c = this.run;
-      const lineAmt = s === 'playing' && !c.loop ? clamp((c.speed - 55) / 40, 0, 1) : 0;
+      this.world.update(dt, this.dist, this.car, this.camera, s === 'playing', stunt ? stunt.e.obj.position.z : null);
+      const lineAmt = s === 'playing' && !stunt ? clamp((c.speed - 55) / 40, 0, 1) : 0;
       this.lines.update(dt, c.speed, lineAmt, this.camera.position.x, this.camera.position.y);
       this.updateShadow();
     }
     this.updateCamera(dtReal);
-    const c = this.run;
     this.sound.drive(clamp(c.speed / 112, 0, 1), {
       running: s === 'playing' || s === 'countdown',
       thrust: s === 'playing' && c.thrusting,
-      loop: s === 'playing' && !!c.loop,
+      loop: s === 'playing' && !!c.ride,
     });
     this.engine.monitor(dtReal, s === 'playing');
   }
@@ -403,19 +428,21 @@ export class Game {
     car.root.rotation.set(0, 0, 0);
     car.pivot.rotation.set(0, this.state === 'garage' ? this.time * 0.45 : 0, 0);
     car.update(dt, 0, 1);
-    // A little cold-gas breathing from the lift ports so the car feels alive.
+    // Short bursts from the lift jets so the car feels alive on the stand.
     this.run.puffT -= dt;
     if (this.run.puffT < 0) {
-      this.run.puffT = 2.4 + Math.random() * 2;
-      this.run.puffBurst = 0.35;
+      this.run.puffT = 2.6 + Math.random() * 2;
+      this.run.puffBurst = 0.45;
     }
-    if (this.run.puffBurst > 0) {
-      this.run.puffBurst -= dt;
+    const burst = this.run.puffBurst > 0;
+    if (burst) this.run.puffBurst -= dt;
+    car.setJets({ down: burst ? 0.55 : 0 }, this.time);
+    if (burst && Math.random() < 0.5) {
       car.root.updateMatrixWorld(true);
       for (const e of car.emitters) {
         if (e.kind !== 'down' || Math.random() > 0.5) continue;
         const p = e.obj.getWorldPosition(this._v);
-        this.fx.smoke.spawn(p.x, p.y, p.z, rand(-3, 3), -2, rand(-3, 3), 1.6, 0.4, 2.8, 0.85, 0.9, 1, 0.3, 1.8, 0.4);
+        this.fx.smoke.spawn(p.x, 0.15, p.z, rand(-3, 3), 0.5, rand(-3, 3), 1.6, 0.4, 2.8, 0.85, 0.9, 1, 0.26, 1.8, 0.4);
       }
     }
   }
@@ -436,14 +463,14 @@ export class Game {
       }
     }
     this.updateCarPose(dt);
-    // Burnout smoke off the rear tyres while the launch control holds the car.
     this.car.root.updateMatrixWorld(true);
-    if (Math.random() < 0.7) {
-      for (const sx of [-0.86, 0.86]) {
-        this.fx.smoke.spawn(c.x + sx, 0.25, 1.3, sx * 2, rand(0.5, 1.5), rand(2, 5), rand(1.2, 1.8), 0.6, 3.2, 0.8, 0.82, 0.86, 0.28, 0.8, 0.2);
-      }
+    // Burnout smoke off the rear tyres while launch control holds the car.
+    if (Math.random() < 0.35) {
+      const sx = Math.random() < 0.5 ? -0.86 : 0.86;
+      this.fx.smoke.spawn(c.x + sx, 0.25, 1.3, sx * 4, rand(0.4, 1.2), rand(0.5, 2), rand(1.0, 1.5), 0.5, 2.6, 0.8, 0.82, 0.86, 0.18, 1.2, 0.2);
     }
     this.car.update(dt, 8, 1);
+    this.car.setJets({}, this.time);
   }
 
   updatePlaying(dt) {
@@ -454,27 +481,25 @@ export class Game {
     if (c.chainTimer <= 0) c.chain = 0;
     c.gemT -= dt;
 
-    // Launch control: 0-60 mph in under a second, then cruise speed climbs with distance.
-    c.launch += dt;
-    if (c.speed < 26.82 && c.launch < 2.5) {
-      c.speed = Math.min(26.82, c.speed + 30 * dt);
-      if (c.speed >= 26.82 && !c.sixty) {
-        c.sixty = true;
-        this.ui.popup('0–60 MPH', `${c.launch.toFixed(2)} s`);
+    if (c.ride) {
+      this.updateRide(dt);
+    } else {
+      // Launch control: 0-60 mph in under a second, then cruise speed climbs with distance.
+      if (!c.drop) {
+        c.launch += dt;
+        if (c.speed < 26.82 && c.launch < 2.5) {
+          c.speed = Math.min(26.82, c.speed + 30 * dt);
+          if (c.speed >= 26.82 && !c.sixty) {
+            c.sixty = true;
+            this.ui.popup('0–60 MPH', `${c.launch.toFixed(2)} s`);
+          }
+        } else {
+          const target = cruiseSpeed(c.odo);
+          c.speed = c.speed < target ? Math.min(target, c.speed + 9 * dt) : damp(c.speed, target, 1, dt);
+        }
+        c.topSpeed = Math.max(c.topSpeed, c.speed);
       }
-    } else {
-      const target = cruiseSpeed(c.odo);
-      c.speed = c.speed < target ? Math.min(target, c.speed + 9 * dt) : damp(c.speed, target, 1, dt);
-    }
-    c.topSpeed = Math.max(c.topSpeed, c.speed);
 
-    if (inp.takeFlip()) this.tryFlip();
-
-    if (c.loop) {
-      this.updateLoop(dt);
-    } else {
-      const lat = c.grounded ? PHYS.LAT_GROUND : PHYS.LAT_AIR;
-      c.vx = damp(c.vx, inp.steer * lat, c.grounded ? 10 : 5, dt);
       const thrust = inp.thrust && c.air > 0;
       if (thrust) c.air = Math.max(0, c.air - PHYS.AIR_USE * dt);
       else if (c.grounded) c.air = Math.min(PHYS.AIR_MAX, c.air + PHYS.AIR_REGEN * dt);
@@ -486,46 +511,52 @@ export class Game {
       }
       if (c.air > 200) c.lowWarned = false;
 
-      const ds = c.speed * dt;
-      const steps = Math.max(1, Math.ceil(ds / 1.0));
+      // Steering. After The Ramp the car merges back off the ramp's lane on its own.
+      let steer = inp.steer;
+      if (c.autoX) {
+        c.autoX.t -= dt;
+        steer = clamp((c.autoX.x - c.x) * 0.45, -1, 1);
+        if (c.autoX.t <= 0 || Math.abs(c.autoX.x - c.x) < 0.4) c.autoX = null;
+      }
+      c.steerIn = steer;
+      if (c.grounded) c.vx = damp(c.vx, steer * PHYS.LAT_GROUND, 10, dt);
+      else c.vx = damp(c.vx, steer * PHYS.LAT_AIR * 0.35, 1.5, dt);
+
+      const fwd = c.drop ? c.drop.vf : c.speed;
+      const ds = fwd * dt;
+      const steps = Math.max(1, Math.ceil(Math.abs(ds) / 1.0));
       for (let k = 0; k < steps; k++) {
         this.step(dt / steps, ds / steps, thrust);
-        if (this.state !== 'playing' || c.loop) break;
+        if (this.state !== 'playing' || c.ride) break;
       }
     }
     if (this.state !== 'playing') return;
 
     this.track.fill(this.dist);
-    this.track.nearMiss(c.x, this.dist, c.y, c.grounded, () => this.award(75, 'NEAR MISS'));
+    if (!c.ride && !c.drop) this.track.nearMiss(c.x, this.dist, c.y, c.grounded, () => this.award(75, 'NEAR MISS'));
     this.updateCarPose(dt);
     this.car.root.updateMatrixWorld(true);
     this.track.collect(this.car.worldCenter, (p) => this.onGem(p), (p) => this.onTank(p));
     this.updateHints(dt);
+    this.updateJets();
     this.emitThrusters(dt);
-    this.ui.update({
-      score: this.score(),
-      chain: c.chain,
-      gems: c.gems,
-      mph: Math.round(c.speed * MPH),
-      speed01: c.speed / 112,
-      air: c.air,
-      air01: c.air / PHYS.AIR_MAX,
-    });
+    this.updateHud();
   }
 
   step(h, ds, thrust) {
     const c = this.run;
     const prev = this.dist;
     this.dist += ds;
-    c.odo += ds;
+    if (ds > 0) c.odo += ds;
     c.x = clamp(c.x + c.vx * h, -PHYS.X_LIMIT, PHYS.X_LIMIT);
-    // Approaching a loop, the suction system lines the car up with the entry lane.
-    if (this.track.nextOf('loop', this.dist, 45)) c.x = Math.min(c.x, damp(c.x, -4.5, 5, h));
 
-    const loopE = this.track.loopAt(prev, this.dist);
-    if (loopE) {
-      this.enterLoop(loopE);
-      return;
+    // The Ramp: reaching its base in its lane starts the climb (suction grabs the car).
+    if (!c.drop && ds > 0) {
+      const br = this.track.bigRampAt(prev, this.dist, c.x);
+      if (br && c.y < 4) {
+        this.enterRide(br);
+        return;
+      }
     }
 
     const surf = this.track.surface(c.x, this.dist, c.y, this._surf);
@@ -533,14 +564,14 @@ export class Game {
       if (thrust) {
         c.grounded = false;
         c.vy = c.onRamp ? Math.max(4, launchVy(c.speed, c.onRamp) * ((this.dist - c.onRamp.s) / c.onRamp.L)) : 4;
-        c.airtime = 0;
         c.onRamp = null;
+        this.takeoff();
       } else if (surf.h < c.y - 0.08) {
         c.grounded = false;
-        c.airtime = 0;
         c.vy = c.onRamp ? launchVy(c.speed, c.onRamp) : 0;
-        if (c.onRamp) this.onLaunch(c.onRamp);
+        if (c.onRamp) this.onLaunch();
         c.onRamp = null;
+        this.takeoff();
       } else {
         c.y = surf.h;
         c.onRamp = surf.ramp;
@@ -551,22 +582,68 @@ export class Game {
       }
     }
     if (!c.grounded) {
-      const fade = clamp((PHYS.CEILING - c.y) / 4, 0, 1);
-      const a = -PHYS.G + (thrust && c.vy < PHYS.MAX_VY ? PHYS.THRUST * fade : 0);
-      c.vy += a * h;
-      c.y += c.vy * h;
-      c.airtime += h;
-      if (c.flip) {
-        c.flip.t += h / PHYS.FLIP_TIME;
-        if (c.flip.t >= 1) this.finishFlip(false);
-      }
+      this.airStep(h, thrust);
       const s2 = this.track.surface(c.x, this.dist, c.y, this._surf2);
       if (c.y <= s2.h && c.vy <= 0) this.land(s2);
     }
-    if (this.state !== 'playing') return;
+    if (this.state !== 'playing' || c.ride) return;
     if (c.invuln <= 0 && !this.god) {
-      const hit = this.track.hit(c.x, this.dist, c.y);
-      if (hit) this.crash(`Hit ${hit.kind === 'barrier' ? 'a barrier' : VEHICLE_NAMES[hit.type] || 'a vehicle'}`);
+      const hit = this.track.hit(c.x, this.dist, c.y, c.drop ? c.drop.e : null);
+      if (hit) {
+        const what = hit.kind === 'barrier' ? 'a barrier' : hit.kind === 'bigramp' ? 'The Ramp' : VEHICLE_NAMES[hit.type] || 'a vehicle';
+        this.crash(`Hit ${what}`);
+      }
+    }
+  }
+
+  /** Leaving the ground: start a fresh air time. */
+  takeoff() {
+    const c = this.run;
+    c.airtime = 0;
+    c.rollTotal = 0;
+    c.flipsAir = 0;
+    c.bounced = false;
+    // No launch is perfectly clean: a little roll to catch.
+    c.rollRate += rand(-0.15, 0.15);
+    c.gustT = 0;
+  }
+
+  airStep(h, thrust) {
+    const c = this.run;
+    if (c.drop) {
+      // Easing down off The Ramp: thrusters hold a gentle descent and swing the
+      // car from upside down back to level, as in the reveal.
+      if (thrust) c.vy = damp(c.vy, -4.6, 5, h);
+      else c.vy -= PHYS.G * h;
+      c.drop.pitch = Math.max(0, c.drop.pitch - (thrust ? 1.9 : 0.22) * h);
+      if (this.dist < c.drop.e.s - 15) c.drop.vf = damp(c.drop.vf, 0, 4, h);
+    } else {
+      const fade = clamp((PHYS.CEILING - c.y) / 4, 0, 1);
+      const a = -PHYS.G + (thrust && c.vy < PHYS.MAX_VY ? PHYS.THRUST * fade : 0);
+      c.vy += a * h;
+    }
+    c.y += c.vy * h;
+    c.airtime += h;
+
+    // Roll: momentum, gusts, an unstable balance point and the player's thrusters.
+    c.gustT -= h;
+    if (c.gustT <= 0) {
+      c.gustT = rand(0.3, 0.6);
+      c.gustTarget = rand(-1, 1) * AIRCTL.GUST * (0.6 + this.track.d * 0.7);
+    }
+    c.gust = damp(c.gust, c.gustTarget, 3, h);
+    const flip = this.input.flip && !c.drop;
+    c.playerTorque = (flip ? AIRCTL.FLIP_TQ : 0) - c.steerIn * AIRCTL.BAL_TQ;
+    // The lift jets steady the car a little while they fire (eased descents are calmer).
+    const calm = c.drop ? 0.55 : thrust ? 0.8 : 1;
+    const torque = c.playerTorque + (c.gust + AIRCTL.INSTAB * Math.sin(c.roll)) * calm;
+    c.rollRate = clamp((c.rollRate + torque * h) * Math.exp(-AIRCTL.DAMP * h), -AIRCTL.MAX_RATE, AIRCTL.MAX_RATE);
+    c.roll += c.rollRate * h;
+    c.rollTotal += c.rollRate * h;
+    const n = Math.floor(Math.abs(c.rollTotal) / TAU);
+    if (n > c.flipsAir) {
+      c.flipsAir = n;
+      this.sound.flip();
     }
   }
 
@@ -575,74 +652,62 @@ export class Game {
     this.camShake(0.15);
   }
 
-  tryFlip() {
+  /** Degrees off level, counting a fast spin at touchdown against you. */
+  rollDeviation() {
     const c = this.run;
-    if (c.grounded || c.loop) return;
-    if (c.flip) {
-      c.flipQueued = true;
-      return;
-    }
-    this.startFlip();
-  }
-
-  startFlip() {
-    const steer = this.input.steer;
-    this.run.flip = { type: steer ? 'kick' : 'back', dir: steer || 1, t: 0 };
-    this.sound.flip();
-  }
-
-  finishFlip(sketchy) {
-    const c = this.run;
-    c.flips.push(c.flip.type);
-    c.flip = null;
-    c.flipDoneAt = c.airtime;
-    if (sketchy) c.sketchy = true;
-    if (c.flipQueued && !c.grounded && !sketchy) {
-      c.flipQueued = false;
-      this.startFlip();
-    }
+    return Math.abs(wrapPi(c.roll)) * DEG + Math.max(0, Math.abs(c.rollRate) - 4) * 4;
   }
 
   land(surf) {
     const c = this.run;
-    if (c.flip) {
-      if (c.flip.t < 0.14) c.flip = null;
-      else if (c.flip.t > 0.84) this.finishFlip(true);
-      else {
-        this.crash('Landed upside down');
-        return;
-      }
-    }
+    const dev = this.rollDeviation();
     const impact = -c.vy;
+    if (c.drop) {
+      this.landDrop(surf, dev, impact);
+      return;
+    }
+    if (dev > GRADE.SKETCHY) {
+      this.crash(dev > 120 ? 'Landed on the roof' : 'Rolled over on landing');
+      return;
+    }
+    const grade = dev <= GRADE.PERFECT ? 'perfect' : dev <= GRADE.CLEAN ? 'clean' : 'sketchy';
+    const flips = Math.floor((Math.abs(c.rollTotal) + 0.6) / TAU);
     c.y = surf.h;
     c.vy = 0;
     c.grounded = true;
     c.onRamp = surf.ramp;
-    c.flipQueued = false;
-    if (c.flips.length) this.scoreFlips();
-    else if (c.airtime > 1.5) this.award(100, 'BIG AIR');
-    if (c.airtime > 0.25) this.landFx(impact);
+    c.roll = wrapPi(c.roll);
+    c.rollRate = 0;
+    this.scoreLanding(grade, flips);
+    this.landFx(impact, grade);
+    if (grade === 'sketchy' && !c.bounced) {
+      // Caught it on two wheels: bounce, scrub speed, and settle.
+      c.speed *= 0.8;
+      c.grounded = false;
+      c.vy = 3.2;
+      c.roll *= 0.5;
+      c.rollTotal = 0;
+      c.flipsAir = 0;
+      c.bounced = true;
+    }
     c.airtime = 0;
   }
 
-  scoreFlips() {
+  scoreLanding(grade, flips) {
     const c = this.run;
-    const n = c.flips.length;
-    const kicks = c.flips.filter((f) => f === 'kick').length;
-    let pts = c.flips.reduce((a, f) => a + (f === 'kick' ? 300 : 250), 0) * (n > 1 ? 1.5 : 1);
-    const name = n === 1 ? (kicks ? 'KICK FLIP' : 'BACK FLIP') : n === 2 ? 'DOUBLE FLIP' : n === 3 ? 'TRIPLE FLIP' : `${n}× FLIP`;
-    let extra = '';
-    if (c.sketchy) extra = 'SKETCHY';
-    else if (c.airtime - c.flipDoneAt < 0.3) {
-      pts *= 1.5;
-      extra = 'PERFECT LANDING';
-    }
-    this.award(pts, name, extra);
-    c.flips = [];
-    c.sketchy = false;
-    if (!save.flipsTaught) {
-      save.flipsTaught = true;
-      persist();
+    const mult = grade === 'perfect' ? 1.5 : grade === 'clean' ? 1 : 0.5;
+    const tag = grade === 'perfect' ? 'PERFECT BALANCE' : grade === 'clean' ? 'CLEAN LANDING' : 'SKETCHY';
+    if (flips > 0) {
+      const name = flips === 1 ? 'KICK FLIP' : flips === 2 ? 'DOUBLE KICK FLIP' : flips === 3 ? 'TRIPLE KICK FLIP' : `${flips}× KICK FLIP`;
+      this.award(400 * flips * (flips > 1 ? 1.5 : 1) * mult, name, tag);
+      if (!save.flipsTaught) {
+        save.flipsTaught = true;
+        persist();
+      }
+    } else if (c.airtime > 1.2) {
+      this.award(120 * mult, grade === 'perfect' ? 'SMOOTH LANDING' : 'BIG AIR', grade === 'perfect' ? 'PERFECT BALANCE' : '');
+    } else if (grade === 'sketchy') {
+      this.ui.popup('SKETCHY!', 'keep it level', 'warn');
     }
   }
 
@@ -684,12 +749,12 @@ export class Game {
     }
   }
 
-  landFx(impact) {
+  landFx(impact, grade = 'clean') {
     const c = this.run;
-    const hard = impact > 13;
+    const hard = impact > 13 || grade === 'sketchy';
     this.sound.land(hard);
     this.car.flashBrake();
-    this.camShake(Math.min(0.55, impact * 0.025));
+    this.camShake(Math.min(0.6, impact * 0.025 + (grade === 'sketchy' ? 0.25 : 0)));
     for (let i = 0; i < (hard ? 14 : 7); i++) {
       this.fx.glow.spawn(c.x + rand(-1, 1), c.y + 0.1, rand(-2, 2), rand(-6, 6), rand(2, 7), rand(2, 9), rand(0.25, 0.5), 0.18, 0.05, 1.0, 0.7, 0.35, 1.0, 1, -25);
     }
@@ -698,49 +763,78 @@ export class Game {
     }
   }
 
-  // ------------------------------------------------------------------ loop --
-  enterLoop(e) {
+  // ------------------------------------------------------------- The Ramp --
+  enterRide(e) {
     const c = this.run;
-    c.loop = { e, a: 0, x0: c.x, R: e.R, inv: false };
-    c.flip = null;
-    c.flips = [];
-    c.grounded = true;
-    c.vy = 0;
-    c.y = 0;
-    c.airtime = 0;
-    c.thrusting = false;
+    const v0 = clamp(c.speed, 16, 26);
+    const T = (2 * BIG_RAMP_LEN) / (v0 + 4);
+    c.ride = { e, phase: 'climb', u: 0, v: v0, a: (v0 - 4) / T, t: 0 };
+    e.used = true;
+    Object.assign(c, { grounded: true, vy: 0, vx: 0, roll: 0, rollRate: 0, thrusting: false, onRamp: null });
     this.dist = e.s;
     this.cutCamera = true;
     this.ui.clearHint();
+    this.ui.popup('THE RAMP', 'suction fans on');
+    this.sound.whoosh();
   }
 
-  updateLoop(dt) {
+  updateRide(dt) {
     const c = this.run;
-    const L = c.loop;
-    L.a += (c.speed * dt) / L.R;
-    c.odo += c.speed * dt;
-    if (L.a >= TAU) {
-      c.loop = null;
-      this.dist = L.e.s;
-      c.x = loopX(TAU);
-      c.y = 0;
-      c.vx = 0;
-      this.car.root.rotation.set(0, 0, 0);
-      this.cutCamera = true;
-      this.award(500, 'SUCTION LOOP');
-      this.sound.whoosh();
+    const R = c.ride;
+    if (R.phase === 'climb') {
+      R.v = Math.max(4, R.v - R.a * dt);
+      R.u = Math.min(BIG_RAMP_LEN, R.u + R.v * dt);
+      c.odo += R.v * dt;
+      c.speed = R.v;
+      if (R.u >= BIG_RAMP_LEN) {
+        R.phase = 'hang';
+        R.t = 0;
+        this.ui.popup('UPSIDE DOWN', 'held by suction · 67 ft up');
+        this.sound.stunt(2);
+      }
+    } else {
+      R.t += dt;
+      c.speed = 0;
+    }
+    const p = bigRampPoint(R.u, this._p);
+    this.dist = R.e.s + p.f;
+    c.y = p.y;
+    c.ridePitch = p.th;
+    c.x = damp(c.x, R.e.x, 10, dt);
+    c.air = Math.min(PHYS.AIR_MAX, c.air + PHYS.AIR_REGEN * dt);
+    c.thrusting = false;
+    if (R.phase === 'hang' && R.t > 1.3) this.releaseRide();
+  }
+
+  releaseRide() {
+    const c = this.run;
+    const R = c.ride;
+    c.ride = null;
+    c.drop = { e: R.e, pitch: c.ridePitch, vf: -9 };
+    // Keep the centre of mass where it was while switching pivots.
+    c.y += 0.55 * Math.cos(c.ridePitch) - 0.55;
+    Object.assign(c, { grounded: false, vy: -0.5, speed: 0, vx: 0, roll: 0, rollRate: rand(-0.4, 0.4) });
+    this.takeoff();
+    this.ui.popup('RELEASE', this.ui.touchMode ? 'hold THRUST to ease down · ◀ ▶ balance' : 'hold SPACE to ease down · ←/→ balance');
+    this.sound.whoosh();
+  }
+
+  landDrop(surf, rollDev, impact) {
+    const c = this.run;
+    const pitchDev = c.drop.pitch * DEG;
+    const dev = Math.max(pitchDev, rollDev);
+    if (dev > GRADE.SKETCHY || impact > 15) {
+      this.crash(impact > 15 ? 'Dropped off The Ramp too hard' : 'Landed upside down off The Ramp');
       return;
     }
-    const a = L.a;
-    this.dist = L.e.s + L.R * Math.sin(a);
-    c.y = L.R * (1 - Math.cos(a));
-    const k = clamp(a / 0.8, 0, 1);
-    c.x = L.x0 + (loopX(a) - L.x0) * k;
-    c.air = Math.min(PHYS.AIR_MAX, c.air + PHYS.AIR_REGEN * dt);
-    if (!L.inv && a > Math.PI * 0.9) {
-      L.inv = true;
-      this.ui.popup('UPSIDE DOWN', 'suction fans holding');
-    }
+    const perfect = dev <= 12 && impact < 6;
+    c.drop = null;
+    Object.assign(c, { y: surf.h, vy: 0, grounded: true, roll: wrapPi(c.roll), rollRate: 0, pitch: 0 });
+    this.award(perfect ? 2000 : 1200, 'THE RAMP', perfect ? 'PERFECT DESCENT' : 'SAFE LANDING');
+    this.landFx(impact, perfect ? 'perfect' : 'clean');
+    // Launch again from a standstill and steer out of the ramp's lane.
+    Object.assign(c, { speed: 0, launch: 0, sixty: false, autoX: { x: 0, t: 2.4 } });
+    this.cutCamera = true;
   }
 
   // ----------------------------------------------------------------- crash --
@@ -750,12 +844,14 @@ export class Game {
     this.state = 'crash';
     c.crashT = 0;
     c.reason = reason;
-    c.loop = null;
+    c.ride = null;
+    c.drop = null;
     c.thrusting = false;
     this.timeScale = 0.3;
     c.vy = 7 + Math.random() * 4;
     c.grounded = false;
     c.spin.set(rand(-5, 5), rand(-3, 3), rand(-7, 7));
+    this.car.setJets({}, this.time);
     this.sound.crash();
     this.sound.silence();
     this.camShake(1.3);
@@ -798,6 +894,7 @@ export class Game {
     }
     const car = this.car;
     car.root.position.set(c.x, c.y, 0);
+    car.root.rotation.set(0, 0, 0);
     car.pivot.rotation.x += c.spin.x * dt;
     car.pivot.rotation.y += c.spin.y * dt;
     car.pivot.rotation.z += c.spin.z * dt;
@@ -860,7 +957,7 @@ export class Game {
     c.revived = true;
     this.track.clearAhead(this.dist, 120);
     Object.assign(c, {
-      y: 0, vy: 0, vx: 0, grounded: true, flip: null, flips: [], flipQueued: false,
+      y: 0, vy: 0, vx: 0, grounded: true, roll: 0, rollRate: 0, rollTotal: 0, ride: null, drop: null, autoX: null,
       speed: 0, launch: 0, sixty: false, invuln: 3, air: Math.max(c.air, 400),
       x: clamp(c.x, -6, 6), countT: 0, countN: 4, chain: 0, chainTimer: 0,
     });
@@ -878,35 +975,95 @@ export class Game {
     const c = this.run;
     const car = this.car;
     car.root.position.set(c.x, c.y, 0);
-    if (c.loop) {
-      car.root.rotation.set(c.loop.a, 0, 0);
+    if (c.ride) {
+      // On The Ramp the car pivots about its wheels' contact with the surface.
+      car.root.rotation.set(c.ridePitch, 0, 0);
       car.pivot.rotation.set(0, 0, 0);
       car.update(dt, c.speed, 1);
       return;
     }
     car.root.rotation.set(0, 0, 0);
-    const rampPitch = c.grounded && c.onRamp ? Math.atan2(c.onRamp.H, c.onRamp.L) : 0;
-    const airPitch = c.grounded ? 0 : clamp(c.vy * 0.02, -0.28, 0.25);
-    c.pitch = damp(c.pitch, rampPitch + airPitch, 12, dt);
-    c.bank = damp(c.bank, -c.vx * 0.018, 8, dt);
-    c.yaw = damp(c.yaw, -c.vx * 0.011, 8, dt);
-    let rx = c.pitch;
-    let rz = c.bank;
-    if (c.flip) {
-      const t = c.flip.t;
-      const e = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
-      if (c.flip.type === 'back') rx += e * TAU;
-      else rz -= c.flip.dir * e * TAU;
+    if (c.drop) {
+      c.pitch = c.drop.pitch;
+    } else {
+      const rampPitch = c.grounded && c.onRamp ? Math.atan2(c.onRamp.H, c.onRamp.L) : 0;
+      const airPitch = c.grounded ? 0 : clamp(c.vy * 0.02, -0.28, 0.25);
+      c.pitch = damp(c.pitch, rampPitch + airPitch, 12, dt);
     }
-    car.pivot.rotation.set(rx, c.yaw, rz, 'YXZ');
+    if (c.grounded) c.roll = damp(wrapPi(c.roll), 0, 14, dt);
+    c.bank = damp(c.bank, c.grounded ? -c.vx * 0.018 : 0, 8, dt);
+    c.yaw = damp(c.yaw, -c.vx * 0.011, 8, dt);
+    car.pivot.rotation.set(c.pitch, c.yaw, c.roll + c.bank, 'YXZ');
     car.root.visible = c.invuln > 0 ? Math.floor(this.time * 14) % 2 === 0 : true;
     car.update(dt, c.grounded ? c.speed : c.speed * 0.5, c.speed > 50 || c.thrusting ? 1 : 0.2);
+  }
+
+  updateJets() {
+    const c = this.run;
+    const air = !c.grounded && !c.ride;
+    const t = c.playerTorque || 0;
+    this.car.setJets(
+      {
+        down: !c.ride && c.thrusting ? 1 : 0,
+        rear: !c.ride && !c.drop && c.launch < 1.1 ? 1 : 0,
+        sideL: air && t < -1 ? clamp(-t / AIRCTL.BAL_TQ, 0, 1) : 0,
+        sideR: air && t > 1 ? clamp(t / AIRCTL.FLIP_TQ, 0.4, 1) : 0,
+      },
+      this.time,
+    );
+  }
+
+  updateHud() {
+    const c = this.run;
+    const airborne = !c.grounded && !c.ride;
+    let attMode = 'roll';
+    let att = wrapPi(c.roll) * DEG;
+    let attState = '';
+    let label = 'DOWNFORCE';
+    let value = Math.round(900 + c.speed * c.speed * 0.42).toLocaleString('en-US');
+    let unit = 'KG';
+    if (c.ride) {
+      attMode = 'pitch';
+      att = c.ridePitch * DEG;
+      value = Math.round(2500 + 2200 * (c.ride.u / BIG_RAMP_LEN)).toLocaleString('en-US');
+    } else if (c.drop) {
+      attMode = 'pitch';
+      att = c.drop.pitch * DEG;
+      label = 'PITCH';
+      value = att.toFixed(1);
+      unit = 'DEG';
+      const dev = Math.max(att, this.rollDeviation());
+      attState = dev <= 12 ? 'good' : dev <= GRADE.CLEAN ? 'ok' : 'bad';
+    } else if (airborne) {
+      const dev = this.rollDeviation();
+      label = 'ROLL';
+      value = Math.round(Math.abs(att)).toString();
+      unit = c.flipsAir ? `DEG · ×${c.flipsAir} FLIP` : 'DEG';
+      attState = dev <= GRADE.PERFECT ? 'good' : dev <= GRADE.CLEAN ? 'ok' : 'bad';
+    }
+    this.ui.update({
+      score: this.score(),
+      chain: c.chain,
+      gems: c.gems,
+      mph: Math.round(c.speed * MPH),
+      speed01: c.speed / 112,
+      air: c.air,
+      air01: c.air / PHYS.AIR_MAX,
+      alt: Math.max(0, c.y * FT),
+      alt01: c.y / 21,
+      attMode,
+      att,
+      attState,
+      label,
+      value,
+      unit,
+    });
   }
 
   updateShadow() {
     const c = this.run;
     const sh = this.shadow;
-    if (c.loop || this.state === 'garage' || this.state === 'title') {
+    if (c.ride || this.state === 'garage' || this.state === 'title') {
       sh.visible = this.state === 'title' || this.state === 'garage';
       sh.position.set(0, 0.03, 0);
       sh.scale.setScalar(1);
@@ -921,18 +1078,17 @@ export class Game {
     sh.material.opacity = clamp(0.9 / (1 + above * 0.22), 0.1, 0.9);
   }
 
-  emitThrusters(dt) {
+  emitThrusters() {
     const c = this.run;
     const car = this.car;
     const smoke = this.fx.smoke;
     const glow = this.fx.glow;
     const rate = this.engine.mobile ? 0.55 : 1;
-    const launching = c.launch < 1.2;
-    const steer = this.input.steer;
+    const launching = c.launch < 1.2 && !c.ride && !c.drop;
     for (const e of car.emitters) {
-      const p = e.obj.getWorldPosition(this._v);
-      const d = car.dirWorld(e.dir, this._d);
-      if (e.kind === 'rear' && (launching || c.thrusting)) {
+      if (e.kind === 'rear' && launching) {
+        const p = e.obj.getWorldPosition(this._v);
+        const d = car.dirWorld(e.dir, this._d);
         if (Math.random() < rate) {
           const sp = rand(16, 26);
           smoke.spawn(p.x, p.y, p.z, d.x * sp + rand(-1, 1), d.y * sp + rand(-0.4, 1.2), d.z * sp, rand(0.6, 1.1), 0.45, 3.4, 0.86, 0.9, 1.0, 0.4, 1.8, 0.8);
@@ -942,36 +1098,41 @@ export class Game {
           const f = k * 0.36 + Math.random() * 0.05;
           glow.spawn(p.x + d.x * f, p.y + d.y * f, p.z + d.z * f, 0, 0, 0, 0.034, 0.36 - k * 0.07, 0.3 - k * 0.07, 0.6, 0.82, 1.0, 0.95, 0, 0, 0);
         }
-      } else if (e.kind === 'down' && c.thrusting) {
-        if (Math.random() < 0.85 * rate) {
-          smoke.spawn(p.x, p.y, p.z, d.x * 8 + rand(-2, 2), -13 + rand(-2, 2), rand(-1, 3), rand(0.5, 0.9), 0.35, 2.6, 0.88, 0.92, 1.0, 0.36, 2.4, 0);
-        }
-        glow.spawn(p.x, p.y - 0.15, p.z, 0, 0, 0, 0.03, 0.3, 0.25, 0.6, 0.85, 1.0, 0.8, 0, 0, 0);
-      } else if (e.kind === 'side' && !c.grounded && steer !== 0 && Math.sign(d.x) === -steer) {
-        if (Math.random() < 0.7 * rate) smoke.spawn(p.x, p.y, p.z, d.x * 12, rand(-1, 1), rand(-1, 2), 0.45, 0.25, 1.6, 0.9, 0.92, 1.0, 0.35, 2.5, 0);
+      } else if (e.kind === 'down' && c.thrusting && !c.ride && Math.random() < 0.45 * rate) {
+        // Cold gas billows where each jet column ends.
+        const p = e.obj.getWorldPosition(this._v);
+        const d = car.dirWorld(e.dir, this._d);
+        const L = 3.6;
+        smoke.spawn(p.x + d.x * L, p.y + d.y * L, p.z + d.z * L, d.x * 6 + rand(-2, 2), d.y * 6 + rand(-1, 1), d.z * 6 + rand(-1, 2), rand(0.6, 1.0), 0.6, 3.2, 0.88, 0.92, 1.0, 0.3, 2.2, 0);
       }
     }
-    // Downwash kicks up a ring of dust when hovering low.
-    if (c.thrusting && c.y < 4.5 && Math.random() < 0.8 * rate) {
+    // Downwash: a ring of white cloud on the ground when hovering low, like the demo.
+    if (c.thrusting && !c.ride && c.y < 6 && Math.random() < 0.9 * rate) {
       const a = Math.random() * TAU;
-      smoke.spawn(c.x + Math.cos(a) * 1.5, 0.3, Math.sin(a) * 2, Math.cos(a) * 9, rand(0.5, 1.5), Math.sin(a) * 9 + 3, rand(0.7, 1.1), 0.8, 3.2, 0.72, 0.75, 0.8, 0.22 * (1 - c.y / 4.5), 2.5, 0);
+      smoke.spawn(c.x + Math.cos(a) * 1.5, 0.3, Math.sin(a) * 2, Math.cos(a) * 9, rand(0.5, 1.5), Math.sin(a) * 9 + 3, rand(0.8, 1.3), 1.0, 4.2, 0.82, 0.85, 0.9, 0.3 * (1 - c.y / 6), 2.2, 0);
     }
   }
 
   updateHints(dt) {
     const c = this.run;
-    if (c.loop) return;
+    if (c.ride) return;
     c.hintT -= dt;
     if (c.hintT > 0) return;
     c.hintT = 0.3;
     const touch = this.ui.touchMode;
-    if (!c.hintThrust && save.runs < 2 && c.launch > 1.6) {
+    const big = this.track.nextOf('bigramp', this.dist, 70);
+    if (!c.hintRamp && save.runs < 4 && c.grounded && big && !big.used && Math.abs(c.x - big.x) > 4) {
+      c.hintRamp = true;
+      this.ui.hint(touch ? 'Steer ▶ right to ride THE RAMP' : 'Steer right to ride THE RAMP', 2600);
+      return;
+    }
+    if (!c.hintThrust && save.runs < 2 && c.launch > 2.2 && !c.drop) {
       c.hintThrust = true;
       this.ui.hint(touch ? 'Hold THRUST to fly' : 'Hold SPACE to fire the thrusters', 3200);
     }
-    if (!save.flipsTaught && !c.hintFlip && this.track.nextOf('ramp', this.dist, 130)) {
+    if (!c.hintFlip && !save.flipsTaught && !c.grounded && !c.drop && c.airtime > 0.1) {
       c.hintFlip = true;
-      this.ui.hint(touch ? 'Hit the ramp, then tap FLIP in the air' : 'Hit the ramp, then press F in the air to flip', 3800);
+      this.ui.hint(touch ? 'Hold FLIP to kick-flip · ◀ ▶ to balance · land level' : 'Hold F to kick-flip · ←/→ to balance · land level', 4200);
     }
     if (!c.hintWall && save.runs < 3 && this.track.nextOf('barrier', this.dist, 120, true)) {
       c.hintWall = true;
@@ -988,6 +1149,7 @@ export class Game {
     const cam = this.camera;
     const tp = this._c;
     const s = this.state === 'paused' ? this.pausedFrom : this.state;
+    const stunt = c.ride || c.drop;
     let lx = 0;
     let ly = 0.8;
     let lz = 0;
@@ -1005,15 +1167,16 @@ export class Game {
       k = 2.5;
       if (cam.aspect > 1.25) shift = g ? -0.2 : 0.17;
       else if (g) shiftY = 0.2;
-    } else if (c.loop) {
-      const P = c.loop.e.obj.position;
-      const R = c.loop.R;
-      tp.set(25, R * 0.78, P.z + 3);
-      lx = 0;
-      ly = R * 0.92;
-      lz = P.z;
-      fov = 60;
-      k = 3.2;
+    } else if (stunt && (s === 'playing' || s === 'paused')) {
+      // The livestream's wide shot: The Ramp side-on, the car tiny against it.
+      const P = stunt.e.obj.position;
+      const tall = clamp((1.2 - cam.aspect) / 0.7, 0, 1);
+      tp.set(P.x - 31 - tall * 14, 6.5, P.z - 2);
+      lx = P.x;
+      ly = 10.5;
+      lz = P.z - 3;
+      fov = 46 + tall * 18;
+      k = 3;
     } else if (s === 'countdown') {
       tp.set(c.x + 3.2, 1.5, 7.2);
       lx = c.x - 0.4;
@@ -1030,7 +1193,7 @@ export class Game {
       k = 1.8;
     } else {
       const sp = clamp((c.speed - 40) / 70, 0, 1);
-      // Tall (portrait) screens get a higher, wider chase view so the road isn't cramped.
+      // Tall (portrait) screens get a higher, wider chase view so the course isn't cramped.
       const tall = clamp((1.2 - cam.aspect) / 0.7, 0, 1);
       tp.set(c.x * 0.72, 3.0 + tall * 1.6 + c.y * 0.78, 8.4 + sp * 1.4 + tall * 3.2);
       lx = c.x * 0.85;

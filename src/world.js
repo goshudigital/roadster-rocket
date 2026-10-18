@@ -1,8 +1,7 @@
 import * as THREE from 'three';
 
-const ROAD_W = 22;
-const ROAD_TILE = 24;
-const GROUND_TILE = 32;
+const GROUND_TILE = 36;
+const BOLLARD_X = 12.5;
 
 function canvas(w, h, draw) {
   const c = document.createElement('canvas');
@@ -21,69 +20,39 @@ function tex(c, { srgb = true, repeat = [1, 1], aniso = 1 } = {}) {
   return t;
 }
 
-function roadCanvases() {
-  const W = 512;
-  const H = 1024;
-  const px = (x) => ((x + ROAD_W / 2) / ROAD_W) * W;
-  const pz = (m) => (m / ROAD_TILE) * H;
-  const albedo = canvas(W, H, (g) => {
-    g.fillStyle = '#1b1d22';
-    g.fillRect(0, 0, W, H);
-    // Asphalt grain.
-    for (let i = 0; i < 9000; i++) {
-      const v = 20 + Math.random() * 26;
-      g.fillStyle = `rgba(${v},${v + 1},${v + 4},${0.35 + Math.random() * 0.4})`;
-      g.fillRect(Math.random() * W, Math.random() * H, 1 + Math.random() * 2, 1 + Math.random() * 2);
-    }
-    // Tyre-polished lanes are slightly darker.
-    for (const lane of [-6, 0, 6]) {
-      for (const off of [-0.9, 0.9]) {
-        g.fillStyle = 'rgba(0,0,0,0.12)';
-        g.fillRect(px(lane + off) - 14, 0, 28, H);
-      }
-    }
-  });
-  const lines = canvas(W, H, (g) => {
-    g.fillStyle = '#000';
-    g.fillRect(0, 0, W, H);
-    g.fillStyle = '#fff';
-    for (const x of [-3, 3]) {
-      for (const z0 of [0, 12]) g.fillRect(px(x) - 2.5, pz(z0), 5, pz(6));
-    }
-    for (const x of [-9, 9]) g.fillRect(px(x) - 3.5, 0, 7, H);
-    // Red / white kerbs on the shoulders.
-    for (let i = 0; i < 12; i++) {
-      g.fillStyle = i % 2 ? '#ff2a3a' : '#e8e8e8';
-      g.fillRect(px(-10.6), pz(i * 2), px(-9.5) - px(-10.6), pz(2));
-      g.fillRect(px(9.5), pz(i * 2), px(10.6) - px(9.5), pz(2));
-    }
-  });
-  // Combine: albedo gets the paint too, the emissive map makes paint catch light.
-  const a = albedo.getContext('2d');
-  a.globalAlpha = 0.85;
-  a.drawImage(lines, 0, 0);
-  return { albedo, lines };
-}
-
-function groundCanvas() {
-  return canvas(512, 512, (g, W, H) => {
-    g.fillStyle = '#23252b';
+/** Dark concrete apron like the test-site pad: big slabs, seams, tyre marks. */
+function apronCanvas() {
+  return canvas(1024, 1024, (g, W, H) => {
+    g.fillStyle = '#17181b';
     g.fillRect(0, 0, W, H);
     const slab = W / 4;
     for (let y = 0; y < 4; y++) {
       for (let x = 0; x < 4; x++) {
-        const v = 28 + Math.random() * 12;
+        const v = 21 + Math.random() * 7;
         g.fillStyle = `rgb(${v},${v + 1},${v + 3})`;
         g.fillRect(x * slab + 2, y * slab + 2, slab - 4, slab - 4);
       }
     }
-    for (let i = 0; i < 4000; i++) {
-      const v = 30 + Math.random() * 30;
-      g.fillStyle = `rgba(${v},${v},${v + 2},0.5)`;
+    for (let i = 0; i < 26000; i++) {
+      const v = 18 + Math.random() * 26;
+      g.fillStyle = `rgba(${v},${v},${v + 2},0.55)`;
       g.fillRect(Math.random() * W, Math.random() * H, 1.5, 1.5);
+    }
+    // Rubber marks and stains.
+    g.lineCap = 'round';
+    for (let i = 0; i < 14; i++) {
+      g.strokeStyle = `rgba(6,6,7,${0.12 + Math.random() * 0.18})`;
+      g.lineWidth = 10 + Math.random() * 16;
+      g.beginPath();
+      const x = Math.random() * W;
+      g.moveTo(x, Math.random() * H);
+      g.bezierCurveTo(x + rand(-200, 200), Math.random() * H, x + rand(-200, 200), Math.random() * H, x + rand(-260, 260), Math.random() * H);
+      g.stroke();
     }
   });
 }
+
+const rand = (a, b) => a + Math.random() * (b - a);
 
 function glowTexture(inner = 'rgba(255,255,255,1)', outer = 'rgba(255,255,255,0)') {
   const c = canvas(128, 128, (g, w) => {
@@ -137,8 +106,7 @@ export class World {
 
     this.buildSky();
     this.buildGround(aniso);
-    this.buildRoad(aniso);
-    this.buildEdgeLights();
+    this.buildCourse();
     this.buildFloodlights();
     this.buildBackdrop();
     this.buildLights();
@@ -232,75 +200,78 @@ export class World {
   }
 
   buildGround(aniso) {
-    this.groundTex = tex(groundCanvas(), { repeat: [3000 / GROUND_TILE, 3000 / GROUND_TILE], aniso });
+    this.groundTex = tex(apronCanvas(), { repeat: [3000 / GROUND_TILE, 3000 / GROUND_TILE], aniso });
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(3000, 3000),
-      new THREE.MeshStandardMaterial({ map: this.groundTex, color: '#8a8f99', roughness: 0.95, metalness: 0 }),
+      new THREE.MeshStandardMaterial({ map: this.groundTex, color: '#b8bcc6', roughness: 0.62, metalness: 0.05 }),
     );
     ground.rotation.x = -Math.PI / 2;
-    ground.position.set(0, -0.25, -1100);
+    ground.position.set(0, 0, -1100);
     this.scene.add(ground);
   }
 
-  buildRoad(aniso) {
-    const { albedo, lines } = roadCanvases();
-    const len = 1100;
-    const rep = [1, len / ROAD_TILE];
-    this.roadTex = tex(albedo, { repeat: rep, aniso });
-    this.roadEmit = tex(lines, { repeat: rep, aniso, srgb: true });
-    const road = new THREE.Mesh(
-      new THREE.PlaneGeometry(ROAD_W, len),
-      new THREE.MeshStandardMaterial({
-        map: this.roadTex,
-        emissiveMap: this.roadEmit,
-        emissive: new THREE.Color('#3a3d45'),
-        roughness: 0.82,
-        metalness: 0.0,
-      }),
+  /** One long white line down the middle and rows of red light bollards, as at the demo. */
+  buildCourse() {
+    const line = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.24, 1300),
+      new THREE.MeshBasicMaterial({ color: '#d4d7dc', polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
     );
-    road.rotation.x = -Math.PI / 2;
-    road.position.set(0, 0, 60 - len / 2);
-    this.scene.add(road);
-  }
+    line.rotation.x = -Math.PI / 2;
+    line.position.set(0, 0.012, 60 - 650);
+    this.scene.add(line);
 
-  buildEdgeLights() {
-    const stripMat = new THREE.MeshStandardMaterial({ color: '#1a0204', emissive: '#ff1e33', emissiveIntensity: 2.6 });
-    for (const side of [-1, 1]) {
-      const strip = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 1100), stripMat);
-      strip.position.set(side * 11.15, 0.05, 60 - 550);
-      this.scene.add(strip);
-    }
-    this.postSpacing = 12;
-    this.postSpan = 1020;
+    this.postSpacing = 9;
+    this.postSpan = 1035;
     const perSide = Math.floor(this.postSpan / this.postSpacing);
-    this.posts = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(0.22, 0.55, 0.22),
-      new THREE.MeshStandardMaterial({ color: '#220306', emissive: '#ff2a3d', emissiveIntensity: 3.2 }),
-      perSide * 2,
-    );
-    this.posts.frustumCulled = false;
     this.postsPerSide = perSide;
-    this.scene.add(this.posts);
+    const n = perSide * 2;
+    this.pods = new THREE.InstancedMesh(
+      new THREE.CylinderGeometry(0.16, 0.2, 0.42, 10),
+      new THREE.MeshStandardMaterial({ color: '#16171b', roughness: 0.5, metalness: 0.4 }),
+      n,
+    );
+    this.podLights = new THREE.InstancedMesh(
+      new THREE.CylinderGeometry(0.15, 0.15, 0.14, 10),
+      new THREE.MeshStandardMaterial({ color: '#2a0306', emissive: '#ff2438', emissiveIntensity: 4.5 }),
+      n,
+    );
+    // Soft red pools of light on the concrete under each bollard.
+    this.podGlow = new THREE.InstancedMesh(
+      new THREE.PlaneGeometry(4.2, 4.2).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ map: glowTexture('rgba(255,40,56,0.9)'), color: '#7a1420', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+      n,
+    );
+    for (const m of [this.pods, this.podLights, this.podGlow]) {
+      m.frustumCulled = false;
+      this.scene.add(m);
+    }
+    this._m = new THREE.Matrix4();
     this.updatePosts(0);
   }
 
   updatePosts(dist) {
-    const m = new THREE.Matrix4();
+    const m = this._m;
     const span = this.postSpan;
     for (let i = 0; i < this.postsPerSide; i++) {
       const z = ((((dist - i * this.postSpacing) % span) + span) % span) - span + 40;
-      m.makeTranslation(-11.6, 0.3, z);
-      this.posts.setMatrixAt(i * 2, m);
-      m.makeTranslation(11.6, 0.3, z);
-      this.posts.setMatrixAt(i * 2 + 1, m);
+      for (const [k, x] of [[i * 2, -BOLLARD_X], [i * 2 + 1, BOLLARD_X]]) {
+        m.makeTranslation(x, 0.21, z);
+        this.pods.setMatrixAt(k, m);
+        m.makeTranslation(x, 0.49, z);
+        this.podLights.setMatrixAt(k, m);
+        m.makeTranslation(x, 0.02, z);
+        this.podGlow.setMatrixAt(k, m);
+      }
     }
-    this.posts.instanceMatrix.needsUpdate = true;
+    this.pods.instanceMatrix.needsUpdate = true;
+    this.podLights.instanceMatrix.needsUpdate = true;
+    this.podGlow.instanceMatrix.needsUpdate = true;
   }
 
   buildFloodlights() {
     this.towers = [];
-    this.towerSpacing = 125;
-    const count = 9;
+    this.towerSpacing = 170;
+    const count = 7;
     this.towerSpan = this.towerSpacing * count;
     const poleMat = new THREE.MeshStandardMaterial({ color: '#2b2e35', roughness: 0.7, metalness: 0.4 });
     const headMat = new THREE.MeshStandardMaterial({ color: '#111', emissive: '#f4f7ff', emissiveIntensity: 7 });
@@ -486,8 +457,6 @@ export class World {
   update(dt, dist, car, camera, running, hideNearZ = null) {
     this.time += dt;
     this.starMat.uniforms.uTime.value = this.time;
-    this.roadTex.offset.y = (dist / ROAD_TILE) % 1;
-    this.roadEmit.offset.y = this.roadTex.offset.y;
     this.groundTex.offset.y = (dist / GROUND_TILE) % 1;
     this.updatePosts(dist);
     for (const t of this.towers) {

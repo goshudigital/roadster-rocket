@@ -4,20 +4,20 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Roadster Rocket – Flying Roadster Stunt Game | Play Free Online</title>
-    <meta name="description" content="Fly a white electric roadster with cold-gas thrusters down a night test track. Jump vehicle lineups, ride suction loops upside down, flip and stick the landing. Free 3D browser game, no download." />
+    <meta name="description" content="Fly a white electric roadster with cold-gas thrusters. Hang upside down on The Ramp, kick-flip over a lineup of trucks and balance it to land. Free 3D browser game, no download." />
     <link rel="canonical" href="%SITE_URL%/" />
     <meta name="theme-color" content="#06070b" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Roadster Rocket" />
     <meta property="og:title" content="Roadster Rocket – Flying Roadster Stunt Game" />
-    <meta property="og:description" content="Thrusters on. Jump the semi, ride the loop upside down, flip and land. Free 3D browser game." />
+    <meta property="og:description" content="Thrusters on. Hang upside down on The Ramp, kick-flip over the semi and balance the landing. Free 3D browser game." />
     <meta property="og:url" content="%SITE_URL%/" />
     <meta property="og:image" content="%SITE_URL%/img/og.jpg" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Roadster Rocket – Flying Roadster Stunt Game" />
-    <meta name="twitter:description" content="Thrusters on. Jump the semi, ride the loop upside down, flip and land." />
+    <meta name="twitter:description" content="Hang upside down on The Ramp, kick-flip over the semi and balance the landing." />
     <meta name="twitter:image" content="%SITE_URL%/img/og.jpg" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/img/icon-192.png" />
@@ -34,7 +34,7 @@
         "name": "Roadster Rocket",
         "url": "%SITE_URL%/",
         "image": "%SITE_URL%/img/og.jpg",
-        "description": "A free 3D browser stunt game: fly an electric roadster with cold-gas thrusters, jump vehicle lineups, ride suction loops and land flips.",
+        "description": "A free 3D browser stunt game: fly an electric roadster with cold-gas thrusters, hang upside down on The Ramp, kick-flip over vehicle lineups and balance the landing.",
         "genre": ["Racing", "Arcade", "Stunt"],
         "gamePlatform": ["Web browser", "Mobile web"],
         "applicationCategory": "Game",
@@ -51,6 +51,7 @@
           { "@type": "Question", "name": "Is Roadster Rocket free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. It runs in your browser for free with no download or sign-up." } },
           { "@type": "Question", "name": "Does it work on phones?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. On touch screens you get on-screen steer, THRUST and FLIP buttons. Turn your phone sideways for the widest view." } },
           { "@type": "Question", "name": "Is this an official Tesla game?", "acceptedAnswer": { "@type": "Answer", "text": "No. Roadster Rocket is an unofficial fan game inspired by the public 2026 Roadster reveal. It is not affiliated with or endorsed by Tesla, Inc. or SpaceX." } },
+          { "@type": "Question", "name": "Why does my car keep rolling over when I land?", "acceptedAnswer": { "@type": "Answer", "text": "After a kick flip the car keeps spinning until you stop it. Let go of FLIP early and tap the opposite direction until the gyroscope turns cyan before the wheels touch down." } },
           { "@type": "Question", "name": "How do I unlock new paint colours?", "acceptedAnswer": { "@type": "Answer", "text": "Collect Mach diamonds during runs. They are saved as credits you can spend in the Garage." } }
         ]
       }
@@ -88,13 +89,47 @@
                 </button>
               </div>
             </div>
-            <div class="gauge gauge-speed" aria-label="Speed">
-              <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="g-track" cx="60" cy="60" r="50"/><circle id="speed-ring" class="g-fill" cx="60" cy="60" r="50"/></svg>
-              <div class="g-text"><b id="speed">0</b><span>MPH</span></div>
-            </div>
-            <div class="gauge gauge-air" aria-label="Air tank">
-              <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="g-track" cx="60" cy="60" r="50"/><circle id="air-ring" class="g-fill" cx="60" cy="60" r="50"/></svg>
-              <div class="g-text"><b id="air">600</b><span>L AIR</span></div>
+            <div class="hud-bottom">
+              <div class="cluster cluster-left">
+                <div class="readout" aria-live="off">
+                  <span class="r-label" id="read-label">DOWNFORCE</span>
+                  <b id="read-value">0</b>
+                  <span class="r-unit" id="read-unit">KG</span>
+                </div>
+                <div class="attitude" id="attitude" aria-label="Car attitude">
+                  <svg class="att-ball" viewBox="0 0 120 120" aria-hidden="true">
+                    <circle class="att-ring" cx="60" cy="60" r="54"/>
+                    <ellipse class="att-grid" cx="60" cy="60" rx="54" ry="18"/>
+                    <ellipse class="att-grid" cx="60" cy="60" rx="18" ry="54"/>
+                    <line class="att-level" x1="8" y1="60" x2="112" y2="60"/>
+                  </svg>
+                  <svg class="att-car att-rear" id="att-rear" viewBox="0 0 100 60" aria-hidden="true">
+                    <path d="M10 40 L14 30 L30 26 L38 16 Q50 12 62 16 L70 26 L86 30 L90 40 Z" fill="currentColor"/>
+                    <rect x="12" y="40" width="14" height="12" rx="3" fill="currentColor"/>
+                    <rect x="74" y="40" width="14" height="12" rx="3" fill="currentColor"/>
+                    <rect x="18" y="31" width="64" height="3" rx="1.5" fill="#ff3347"/>
+                  </svg>
+                  <svg class="att-car att-side" id="att-side" viewBox="0 0 120 50" aria-hidden="true">
+                    <path d="M6 34 L10 26 L40 22 L58 12 L82 14 L112 28 L114 34 Z" fill="currentColor"/>
+                    <circle cx="30" cy="36" r="8" fill="currentColor"/>
+                    <circle cx="92" cy="36" r="8" fill="currentColor"/>
+                  </svg>
+                </div>
+              </div>
+              <div class="cluster cluster-right">
+              <div class="gauge gauge-air" aria-label="Air">
+                <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="g-track" cx="60" cy="60" r="50"/><circle id="air-ring" class="g-fill" cx="60" cy="60" r="50"/></svg>
+                <div class="g-text"><span class="g-label">AIR</span><b id="air">600</b><span>L</span></div>
+              </div>
+              <div class="gauge gauge-speed" aria-label="Speed">
+                <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="g-track" cx="60" cy="60" r="50"/><circle id="speed-ring" class="g-fill" cx="60" cy="60" r="50"/></svg>
+                <div class="g-text"><span class="g-label">SPEED</span><b id="speed">0</b><span>MPH</span></div>
+              </div>
+              <div class="gauge gauge-alt" aria-label="Altitude">
+                <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="g-track" cx="60" cy="60" r="50"/><circle id="alt-ring" class="g-fill" cx="60" cy="60" r="50"/></svg>
+                <div class="g-text"><span class="g-label">ALTITUDE</span><b id="alt">0.0</b><span>FT</span></div>
+              </div>
+              </div>
             </div>
             <div id="popups" class="popups" aria-live="polite"></div>
             <div id="hint" class="hint"></div>
@@ -123,7 +158,7 @@
             <div class="panel title-panel">
               <p class="kicker">Night run · Launch site</p>
               <h2 class="logo">ROADSTER<span>ROCKET</span></h2>
-              <p class="tagline">Thrusters armed. Jump the lineup, ride the loop upside down, stick the landing.</p>
+              <p class="tagline">Thrusters armed. Hang upside down on The Ramp, kick-flip over the lineup, balance it and stick the landing.</p>
               <button id="btn-play" class="btn btn-primary" type="button">PLAY</button>
               <div class="row">
                 <button id="btn-garage" class="btn" type="button">GARAGE</button>
@@ -134,7 +169,7 @@
                 <div><dt>Best</dt><dd id="title-best">0</dd></div>
                 <div><dt>Diamonds</dt><dd id="title-coins">0</dd></div>
               </dl>
-              <p class="keys desktop-only"><kbd>←</kbd><kbd>→</kbd> steer · hold <kbd>Space</kbd> thrust · <kbd>F</kbd> flip</p>
+              <p class="keys desktop-only"><kbd>←</kbd><kbd>→</kbd> steer &amp; balance · hold <kbd>Space</kbd> thrust · hold <kbd>F</kbd> kick flip</p>
             </div>
           </section>
 
@@ -191,19 +226,19 @@
       <article class="content">
         <header class="content-hero">
           <h1>Roadster Rocket: the flying roadster stunt game</h1>
-          <p class="lede">Strap into a white electric roadster packing a SpaceX-style cold-gas thruster kit and take it down a floodlit night test track. Launch off red kicker ramps over lineups of trucks and robotaxis, let the suction fans carry you upside down around giant loops, and fire the thrusters to hop barriers. Every stunt you land multiplies your score. Crash, and the run is over.</p>
+          <p class="lede">Strap into a white electric roadster packing a SpaceX-style cold-gas thruster kit and take it out onto a dark, floodlit test apron. Drive up The Ramp until you hang upside down 67 ft in the air on suction alone, then ease back down on your thrusters. Launch over lineups of trucks and robotaxis, kick-flip the car in mid-air and balance it level before you touch down. Every stunt you land multiplies your score. Land crooked and you roll it.</p>
         </header>
 
         <section id="how-to-play">
           <h2>How to play</h2>
-          <p>Your roadster accelerates on its own and gets faster the further you go, from about 100 mph at launch up to 230+ mph. You steer, decide when to fly, and decide when to flip.</p>
+          <p>Your roadster accelerates on its own and gets faster the further you go, from about 100 mph at launch up to 230+ mph. On the ground you steer. In the air the same keys fire the side thrusters, and you need them: the car keeps spinning once it starts to roll, gusts push it around, and it will tip over unless you keep it balanced. Land with the wheels level.</p>
           <div class="table-wrap">
             <table class="controls">
               <thead><tr><th>Action</th><th>Keyboard</th><th>Touch</th></tr></thead>
               <tbody>
-                <tr><td>Steer</td><td><kbd>←</kbd> <kbd>→</kbd> or <kbd>A</kbd> <kbd>D</kbd></td><td>◀ ▶ buttons</td></tr>
-                <tr><td>Fire thrusters (fly)</td><td>Hold <kbd>Space</kbd>, <kbd>W</kbd> or <kbd>↑</kbd></td><td>Hold THRUST</td></tr>
-                <tr><td>Flip (in the air)</td><td><kbd>F</kbd>, <kbd>S</kbd> or <kbd>↓</kbd> — hold a direction for a kick flip</td><td>Tap FLIP</td></tr>
+                <tr><td>Steer (ground) / balance (air)</td><td><kbd>←</kbd> <kbd>→</kbd> or <kbd>A</kbd> <kbd>D</kbd></td><td>◀ ▶ buttons</td></tr>
+                <tr><td>Fire lift thrusters (fly, ease down)</td><td>Hold <kbd>Space</kbd>, <kbd>W</kbd> or <kbd>↑</kbd></td><td>Hold THRUST</td></tr>
+                <tr><td>Kick flip (roll left, in the air)</td><td>Hold <kbd>F</kbd>, <kbd>S</kbd> or <kbd>↓</kbd> — keep holding to keep spinning</td><td>Hold FLIP</td></tr>
                 <tr><td>Pause</td><td><kbd>P</kbd> or <kbd>Esc</kbd></td><td>Pause button</td></tr>
               </tbody>
             </table>
@@ -217,9 +252,9 @@
           <ul class="score-list">
             <li><b>Distance</b> — one point for every metre you cover.</li>
             <li><b>Mach diamonds</b> — the glowing cyan crystals. Each one is worth points and is banked as a credit for the Garage.</li>
-            <li><b>Back flip</b> (+250) and <b>kick flip</b> (+300) — tap FLIP while airborne. Hold left or right as you tap for a kick flip. Land with the wheels down or you crash.</li>
-            <li><b>Perfect landing</b> — finish a flip cleanly and touch down level for a bonus.</li>
-            <li><b>Suction loop</b> (+500) — fans under the car hold it to the track, so it can drive a full loop upside down.</li>
+            <li><b>Kick flip</b> (+400 each) — hold FLIP in the air and the car barrel-rolls to the left, like the reveal's jump over the semi. Let go before the turn is complete and counter with the other thruster so it stops level. Two or three flips in one jump pay 1.5×.</li>
+            <li><b>Balance</b> — every landing is graded on how level the car is: <b>Perfect</b> (within 10°, 1.5× points), <b>Clean</b> (within 28°) or <b>Sketchy</b> (within 50°, half points and a big bounce). Any worse and the car rolls over. The gyroscope on the HUD turns cyan, gold or red to tell you where you stand.</li>
+            <li><b>The Ramp</b> (+1,200, or +2,000 for a perfect descent) — stay in the right lane and the suction fans carry you up the tall concrete curl until you hang upside down at the top. When it lets go, hold THRUST to ease down while the jets swing the car back to level, balance it, and touch down softly. Then it's 0–60 in under a second all over again.</li>
             <li><b>Near miss</b> (+75) — skim past a parked vehicle or clear its roof by a hair.</li>
             <li><b>Roof run</b> — land on top of a semi trailer and drive along it.</li>
             <li><b>Chain</b> — land stunts within a few seconds of each other to raise your multiplier, up to ×8.</li>
@@ -234,11 +269,12 @@
         <section id="tips">
           <h2>Pro tips</h2>
           <ol>
-            <li>Ramps launch you higher the faster you hit them. At top speed you have time for two flips.</li>
-            <li>Start a flip early. A flip takes a little over half a second, and landing halfway through one is a crash.</li>
+            <li>Ramps launch you higher the faster you hit them. Hold THRUST in the air for extra hang time and you can fit two or three kick flips in.</li>
+            <li>Let go of FLIP early. The spin carries on, so start countering about a quarter-turn before the car comes back level.</li>
+            <li>Watch the gyroscope, not the car. Small taps of left/right keep it level; big inputs set off a wobble.</li>
+            <li>On The Ramp, start holding THRUST as soon as the car lets go. Without the jets it drops like a stone and never turns back over.</li>
             <li>Barrier walls are low. A quick tap of THRUST is enough, which saves air for the lineups.</li>
             <li>Semis are tall but have flat roofs. Fly onto one and you can drive along the top.</li>
-            <li>Keep the chain alive: a near miss or a perfect landing right before a loop is worth a lot more.</li>
           </ol>
         </section>
 
@@ -246,7 +282,8 @@
           <h2>Inspired by the real 2026 Roadster reveal</h2>
           <p>On 15 October 2026, Tesla showed its second-generation Roadster at a livestreamed event near SpaceX's test site in McGregor, Texas. Two demonstrations stole the show. In the first, the car drove up a huge curved ramp until it was completely upside down, held on by a fan-powered suction system under the floor, then let go, fired its thrusters, rotated in mid-air and came back down on its wheels. In the second, it launched over a row of parked vehicles and a semi-truck and landed on the far side.</p>
           <p>According to the company, the demo car used ten cold-gas thrusters fed from about 600 litres of compressed air stored in carbon-fibre-overwrapped pressure vessels, and the air tank can be refilled. Three versions were announced: a road-going Performance model, a Thrust model with rear thrusters for sub-one-second 0–60 mph runs, and an invite-only, single-seat Rocket model with thrusters around the whole body that Tesla says is not approved for public roads. All three are quoted at more than 230 mph and about 300 miles of range, with production planned for 2028.</p>
-          <p>Roadster Rocket turns those ideas into game mechanics: the suction loop, the vehicle-lineup jump, the limited air supply and the mid-air flip. The car in the game is our own low-poly interpretation of the angular white design, with its gold-tinted canopy, full-width light bars and hidden active wing.</p>
+          <p>In the livestream footage, the telemetry shows the car climbing the ramp to a pitch of about 170° and an altitude of roughly 69 ft, hanging there upside down on its fans, then rolling back down, letting go of the wall and swinging back to level as it settled to the ground on its thrusters. Over the vehicle lineup it hovered high above the semi on four white jets and did a full barrel roll before setting down.</p>
+          <p>Roadster Rocket turns those moments into game mechanics: The Ramp, the lineup jump with its kick flip, the limited air supply and the balancing act of landing level. Even the HUD borrows the stream's look, with downforce, pitch and altitude readouts and a gyroscope that shows the car's attitude. The car itself is our own low-poly interpretation of the angular white design, with its gold-tinted canopy, full-width light bars and hidden active wing.</p>
           <p class="sources">Further reading: <a href="https://techcrunch.com/2026/10/15/tesla-reveals-spacex-powered-roadster-that-flies-and-falls-with-style/" rel="noopener" target="_blank">TechCrunch</a> · <a href="https://www.foxbusiness.com/technology/teslas-new-roadster-makes-flying-debut-hitting-60-mph-under-second" rel="noopener" target="_blank">Fox Business</a> · <a href="https://www.tesla.com/roadster" rel="noopener" target="_blank">Tesla Roadster page</a></p>
         </section>
 
@@ -255,6 +292,7 @@
           <details open><summary>Is Roadster Rocket free?</summary><p>Yes. It runs in your browser with no download and no sign-up. The game is supported by ads on this page.</p></details>
           <details><summary>Does it work on phones and tablets?</summary><p>Yes. Touch screens get on-screen steer, THRUST and FLIP buttons. Turn your phone sideways for the widest view, and use the fullscreen button in the corner of the game.</p></details>
           <details><summary>Is this an official Tesla game?</summary><p>No. Roadster Rocket is an unofficial fan game inspired by the public 2026 Roadster reveal. It is not affiliated with, sponsored by or endorsed by Tesla, Inc. or SpaceX.</p></details>
+          <details><summary>Why does my car keep rolling over when I land?</summary><p>Once the car starts to roll it keeps rolling, so after a kick flip you have to stop the spin yourself. Let go of FLIP early, then tap the opposite direction until the gyroscope turns cyan before the wheels touch down.</p></details>
           <details><summary>How do I unlock new paint colours?</summary><p>Collect Mach diamonds during runs. They are banked as credits that you can spend in the Garage on paints such as Midnight Carbon, Rocket Red and Gold Glaze.</p></details>
           <details><summary>Is my progress saved?</summary><p>Your best score, diamonds and paints are stored in your browser on this device. Clearing site data resets them.</p></details>
           <details><summary>The game is slow on my device. What can I do?</summary><p>The game lowers its own graphics quality if it detects a low frame rate. Closing other tabs and using the latest Chrome, Safari, Edge or Firefox also helps.</p></details>
