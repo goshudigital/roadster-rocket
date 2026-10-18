@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>About the game | Roadster Rocket</title>
+    <meta name="description" content="Roadster Rocket is a free 3D browser stunt game about a flying electric roadster. Learn how it was made and what is next." />
+    <link rel="canonical" href="%SITE_URL%/about" />
+    <meta name="theme-color" content="#06070b" />
+    <meta property="og:title" content="About the game | Roadster Rocket" />
+    <meta property="og:description" content="Roadster Rocket is a free 3D browser stunt game about a flying electric roadster. Learn how it was made and what is next." />
+    <meta property="og:image" content="%SITE_URL%/img/og.jpg" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/src/style.css" />
+    <!--ADSENSE_HEAD-->
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="Roadster Rocket home">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M3 21 L16 6 L29 21 L22 21 L16 14 L10 21 Z" fill="currentColor"/><rect x="6" y="24" width="20" height="2.2" rx="1.1" fill="#ff3347"/></svg>
+        <span>ROADSTER<b>ROCKET</b></span>
+      </a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="/">Play</a>
+        <a href="/about">About</a>
+        <a href="/contact">Contact</a>
+      </nav>
+    </header>
+    <main class="content">
+      <h1>About Roadster Rocket</h1>
+      <p class="lede">Roadster Rocket is a free arcade stunt game that runs right in your web browser. You drive a white electric roadster fitted with cold-gas thrusters down a floodlit night test track, and every run is a mix of quick reactions and small decisions: when to fly, when to flip and when to save air.</p>
+      <h2>Why we made it</h2>
+      <p>The October 2026 reveal of a thruster-equipped roadster that drove upside down around a ramp and hopped over a row of parked vehicles was one of the most talked-about car videos of the year. We wanted to know what it would feel like to drive something like that, so we built a game around the ideas from the demo: suction that keeps you glued to the track, a limited tank of compressed air for lift, and the need to land on your wheels.</p>
+      <h2>How it was built</h2>
+      <ul>
+        <li><b>3D models:</b> the roadster, the parked vehicles and the barriers were modelled procedurally in Blender and exported as compact glTF files.</li>
+        <li><b>Rendering:</b> the game uses three.js and WebGL 2 with bloom lighting, instanced particles for the cold-gas plumes and an automatic quality system that keeps it smooth on phones.</li>
+        <li><b>Sound:</b> every sound, from the electric motor whine to the synthwave soundtrack, is generated live in the browser with the Web Audio API. There are no audio files to download.</li>
+        <li><b>No sign-up:</b> your best score, diamonds and unlocked paints are saved in your own browser.</li>
+      </ul>
+      <h2>What's next</h2>
+      <p>We are working on new tracks, daily challenges and more paint finishes. If you have an idea or found a bug, <a href="/contact">get in touch</a>.</p>
+      <h2>Not affiliated</h2>
+      <p>Roadster Rocket is an independent fan project. It is not made, sponsored or endorsed by Tesla, Inc. or SpaceX. The in-game car is our own design inspired by publicly shown concepts.</p>
+    </main>
+    <footer class="site-footer">
+      <nav aria-label="Site">
+        <a href="/">Play</a>
+        <a href="/about">About</a>
+        <a href="/privacy">Privacy policy</a>
+        <a href="/terms">Terms</a>
+        <a href="/contact">Contact</a>
+      </nav>
+      <p class="disclaimer">Roadster Rocket is an unofficial fan game and is not affiliated with Tesla, Inc. or SpaceX. "Tesla" and "Roadster" are trademarks of their respective owners and are used here only to describe the inspiration for the game.</p>
+      <p class="copy">© 2026 Roadster Rocket · Made by <a href="https://goshudigital.com" rel="noopener" target="_blank">Goshu Digital</a></p>
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "name": "roadster-rocket",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Roadster Rocket - a 3D flying roadster stunt game for the browser.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "models": "npm run models:car && npm run models:vehicles",
+    "models:car": "/Applications/Blender.app/Contents/MacOS/Blender -b -P blender/roadster.py -- blender/out/roadster.glb && npx --yes @gltf-transform/cli meshopt blender/out/roadster.glb public/models/roadster.glb --level medium",
+    "models:vehicles": "/Applications/Blender.app/Contents/MacOS/Blender -b -P blender/vehicles.py -- blender/out/vehicles.glb && npx --yes @gltf-transform/cli meshopt blender/out/vehicles.glb public/models/vehicles.glb --level medium",
+    "art": "/Applications/Blender.app/Contents/MacOS/Blender -b -P blender/promo.py -- public/img/og.jpg 1200 630 160 --text && /Applications/Blender.app/Contents/MacOS/Blender -b -P blender/icons.py -- public/img"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "vite": "^8.3.4"
+  }
+}

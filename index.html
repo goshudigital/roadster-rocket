@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Roadster Rocket – Flying Roadster Stunt Game | Play Free Online</title>
+    <meta name="description" content="Fly a white electric roadster with cold-gas thrusters down a night test track. Jump vehicle lineups, ride suction loops upside down, flip and stick the landing. Free 3D browser game, no download." />
+    <link rel="canonical" href="%SITE_URL%/" />
+    <meta name="theme-color" content="#06070b" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Roadster Rocket" />
+    <meta property="og:title" content="Roadster Rocket – Flying Roadster Stunt Game" />
+    <meta property="og:description" content="Thrusters on. Jump the semi, ride the loop upside down, flip and land. Free 3D browser game." />
+    <meta property="og:url" content="%SITE_URL%/" />
+    <meta property="og:image" content="%SITE_URL%/img/og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Roadster Rocket – Flying Roadster Stunt Game" />
+    <meta name="twitter:description" content="Thrusters on. Jump the semi, ride the loop upside down, flip and land." />
+    <meta name="twitter:image" content="%SITE_URL%/img/og.jpg" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/img/icon-192.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="preload" href="/models/roadster.glb" as="fetch" crossorigin />
+    <!--ADSENSE_HEAD-->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "VideoGame",
+        "name": "Roadster Rocket",
+        "url": "%SITE_URL%/",
+        "image": "%SITE_URL%/img/og.jpg",
+        "description": "A free 3D browser stunt game: fly an electric roadster with cold-gas thrusters, jump vehicle lineups, ride suction loops and land flips.",
+        "genre": ["Racing", "Arcade", "Stunt"],
+        "gamePlatform": ["Web browser", "Mobile web"],
+        "applicationCategory": "Game",
+        "operatingSystem": "Any",
+        "playMode": "SinglePlayer",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          { "@type": "Question", "name": "Is Roadster Rocket free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. It runs in your browser for free with no download or sign-up." } },
+          { "@type": "Question", "name": "Does it work on phones?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. On touch screens you get on-screen steer, THRUST and FLIP buttons. Turn your phone sideways for the widest view." } },
+          { "@type": "Question", "name": "Is this an official Tesla game?", "acceptedAnswer": { "@type": "Answer", "text": "No. Roadster Rocket is an unofficial fan game inspired by the public 2026 Roadster reveal. It is not affiliated with or endorsed by Tesla, Inc. or SpaceX." } },
+          { "@type": "Question", "name": "How do I unlock new paint colours?", "acceptedAnswer": { "@type": "Answer", "text": "Collect Mach diamonds during runs. They are saved as credits you can spend in the Garage." } }
+        ]
+      }
+    </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="Roadster Rocket home">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M3 21 L16 6 L29 21 L22 21 L16 14 L10 21 Z" fill="currentColor"/><rect x="6" y="24" width="20" height="2.2" rx="1.1" fill="#ff3347"/></svg>
+        <span>ROADSTER<b>ROCKET</b></span>
+      </a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="#how-to-play">How to play</a>
+        <a href="#inspiration">The real stunts</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="game-section" aria-label="Play Roadster Rocket">
+        <div id="game-wrap" class="game-wrap">
+          <canvas id="game" aria-label="Roadster Rocket game canvas"></canvas>
+          <div class="vignette" aria-hidden="true"></div>
+
+          <div id="hud" class="hud" hidden>
+            <div class="hud-top">
+              <div class="hud-score">
+                <span id="score">0</span>
+                <span id="chain" class="chain"></span>
+              </div>
+              <div class="hud-right">
+                <div class="hud-gems" title="Mach diamonds"><i class="gem-ico" aria-hidden="true"></i><span id="gems">0</span></div>
+                <button id="btn-pause" class="icon-btn" type="button" aria-label="Pause">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="gauge gauge-speed" aria-label="Speed">
+              <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="g-track" cx="60" cy="60" r="50"/><circle id="speed-ring" class="g-fill" cx="60" cy="60" r="50"/></svg>
+              <div class="g-text"><b id="speed">0</b><span>MPH</span></div>
+            </div>
+            <div class="gauge gauge-air" aria-label="Air tank">
+              <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="g-track" cx="60" cy="60" r="50"/><circle id="air-ring" class="g-fill" cx="60" cy="60" r="50"/></svg>
+              <div class="g-text"><b id="air">600</b><span>L AIR</span></div>
+            </div>
+            <div id="popups" class="popups" aria-live="polite"></div>
+            <div id="hint" class="hint"></div>
+          </div>
+
+          <div id="touch" class="touch" hidden>
+            <div class="touch-left">
+              <button type="button" data-act="left" aria-label="Steer left">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 L8 12 L15 19" /></svg>
+              </button>
+              <button type="button" data-act="right" aria-label="Steer right">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5 L16 12 L9 19" /></svg>
+              </button>
+            </div>
+            <div class="touch-right">
+              <button type="button" data-act="flip" class="t-flip">FLIP</button>
+              <button type="button" data-act="thrust" class="t-thrust">THRUST</button>
+            </div>
+          </div>
+
+          <section id="scr-loading" class="screen show" aria-live="polite">
+            <div class="loader"><div class="loader-bar"><i id="load-bar"></i></div><p id="load-text">Pressurising 600 L of cold gas…</p></div>
+          </section>
+
+          <section id="scr-title" class="screen">
+            <div class="panel title-panel">
+              <p class="kicker">Night run · Launch site</p>
+              <h2 class="logo">ROADSTER<span>ROCKET</span></h2>
+              <p class="tagline">Thrusters armed. Jump the lineup, ride the loop upside down, stick the landing.</p>
+              <button id="btn-play" class="btn btn-primary" type="button">PLAY</button>
+              <div class="row">
+                <button id="btn-garage" class="btn" type="button">GARAGE</button>
+                <button id="btn-sound" class="btn btn-icon" type="button" aria-label="Toggle sound" aria-pressed="true">SFX</button>
+                <button id="btn-music" class="btn btn-icon" type="button" aria-label="Toggle music" aria-pressed="true">MUSIC</button>
+              </div>
+              <dl class="stats">
+                <div><dt>Best</dt><dd id="title-best">0</dd></div>
+                <div><dt>Diamonds</dt><dd id="title-coins">0</dd></div>
+              </dl>
+              <p class="keys desktop-only"><kbd>←</kbd><kbd>→</kbd> steer · hold <kbd>Space</kbd> thrust · <kbd>F</kbd> flip</p>
+            </div>
+          </section>
+
+          <section id="scr-garage" class="screen">
+            <div class="panel garage-panel">
+              <h2>GARAGE</h2>
+              <p class="sub">Spend Mach diamonds on paint. <span class="coins-pill"><i class="gem-ico" aria-hidden="true"></i><b id="garage-coins">0</b></span></p>
+              <ul id="paint-list" class="paint-list"></ul>
+              <button id="btn-garage-back" class="btn" type="button">BACK</button>
+            </div>
+          </section>
+
+          <section id="scr-pause" class="screen">
+            <div class="panel">
+              <h2>PAUSED</h2>
+              <button id="btn-resume" class="btn btn-primary" type="button">RESUME</button>
+              <div class="row">
+                <button id="btn-restart" class="btn" type="button">RESTART</button>
+                <button id="btn-menu" class="btn" type="button">MENU</button>
+              </div>
+            </div>
+          </section>
+
+          <section id="scr-over" class="screen">
+            <div class="panel over-panel">
+              <p id="over-reason" class="kicker">Crashed</p>
+              <h2 id="over-title">RUN OVER</h2>
+              <div class="big-score" id="over-score">0</div>
+              <p id="over-best" class="over-best"></p>
+              <dl class="stats stats-4">
+                <div><dt>Distance</dt><dd id="st-dist">0 m</dd></div>
+                <div><dt>Top speed</dt><dd id="st-speed">0</dd></div>
+                <div><dt>Stunts</dt><dd id="st-stunts">0</dd></div>
+                <div><dt>Diamonds</dt><dd id="st-gems">0</dd></div>
+              </dl>
+              <button id="btn-revive" class="btn btn-gold" type="button" hidden>REVIVE · WATCH AD</button>
+              <button id="btn-again" class="btn btn-primary" type="button">PLAY AGAIN</button>
+              <div class="row">
+                <button id="btn-over-garage" class="btn" type="button">GARAGE</button>
+                <button id="btn-share" class="btn" type="button">SHARE</button>
+              </div>
+            </div>
+          </section>
+
+          <div id="countdown" class="countdown" aria-live="assertive"></div>
+          <div id="toast" class="toast" role="status"></div>
+          <button id="btn-fullscreen" class="icon-btn fs-btn" type="button" aria-label="Fullscreen">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+          </button>
+        </div>
+        <div class="ad-wrap" data-ad="belowGame"></div>
+      </section>
+
+      <article class="content">
+        <header class="content-hero">
+          <h1>Roadster Rocket: the flying roadster stunt game</h1>
+          <p class="lede">Strap into a white electric roadster packing a SpaceX-style cold-gas thruster kit and take it down a floodlit night test track. Launch off red kicker ramps over lineups of trucks and robotaxis, let the suction fans carry you upside down around giant loops, and fire the thrusters to hop barriers. Every stunt you land multiplies your score. Crash, and the run is over.</p>
+        </header>
+
+        <section id="how-to-play">
+          <h2>How to play</h2>
+          <p>Your roadster accelerates on its own and gets faster the further you go, from about 100 mph at launch up to 230+ mph. You steer, decide when to fly, and decide when to flip.</p>
+          <div class="table-wrap">
+            <table class="controls">
+              <thead><tr><th>Action</th><th>Keyboard</th><th>Touch</th></tr></thead>
+              <tbody>
+                <tr><td>Steer</td><td><kbd>←</kbd> <kbd>→</kbd> or <kbd>A</kbd> <kbd>D</kbd></td><td>◀ ▶ buttons</td></tr>
+                <tr><td>Fire thrusters (fly)</td><td>Hold <kbd>Space</kbd>, <kbd>W</kbd> or <kbd>↑</kbd></td><td>Hold THRUST</td></tr>
+                <tr><td>Flip (in the air)</td><td><kbd>F</kbd>, <kbd>S</kbd> or <kbd>↓</kbd> — hold a direction for a kick flip</td><td>Tap FLIP</td></tr>
+                <tr><td>Pause</td><td><kbd>P</kbd> or <kbd>Esc</kbd></td><td>Pause button</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <div class="ad-wrap ad-in-content" data-ad="inContent"></div>
+
+        <section id="stunts">
+          <h2>Stunts and scoring</h2>
+          <ul class="score-list">
+            <li><b>Distance</b> — one point for every metre you cover.</li>
+            <li><b>Mach diamonds</b> — the glowing cyan crystals. Each one is worth points and is banked as a credit for the Garage.</li>
+            <li><b>Back flip</b> (+250) and <b>kick flip</b> (+300) — tap FLIP while airborne. Hold left or right as you tap for a kick flip. Land with the wheels down or you crash.</li>
+            <li><b>Perfect landing</b> — finish a flip cleanly and touch down level for a bonus.</li>
+            <li><b>Suction loop</b> (+500) — fans under the car hold it to the track, so it can drive a full loop upside down.</li>
+            <li><b>Near miss</b> (+75) — skim past a parked vehicle or clear its roof by a hair.</li>
+            <li><b>Roof run</b> — land on top of a semi trailer and drive along it.</li>
+            <li><b>Chain</b> — land stunts within a few seconds of each other to raise your multiplier, up to ×8.</li>
+          </ul>
+        </section>
+
+        <section id="air-tank">
+          <h2>The 600-litre air tank</h2>
+          <p>The thrusters run on compressed air, not fuel. Your tank holds 600 litres and drains while you hold THRUST. It recharges slowly whenever all four wheels are on the ground, and blue carbon-wrapped air canisters on the track top it up in one go. Run dry in mid-air and gravity takes over, so pick your moments: short bursts clear a barrier, longer burns carry you over a full lineup.</p>
+        </section>
+
+        <section id="tips">
+          <h2>Pro tips</h2>
+          <ol>
+            <li>Ramps launch you higher the faster you hit them. At top speed you have time for two flips.</li>
+            <li>Start a flip early. A flip takes a little over half a second, and landing halfway through one is a crash.</li>
+            <li>Barrier walls are low. A quick tap of THRUST is enough, which saves air for the lineups.</li>
+            <li>Semis are tall but have flat roofs. Fly onto one and you can drive along the top.</li>
+            <li>Keep the chain alive: a near miss or a perfect landing right before a loop is worth a lot more.</li>
+          </ol>
+        </section>
+
+        <section id="inspiration">
+          <h2>Inspired by the real 2026 Roadster reveal</h2>
+          <p>On 15 October 2026, Tesla showed its second-generation Roadster at a livestreamed event near SpaceX's test site in McGregor, Texas. Two demonstrations stole the show. In the first, the car drove up a huge curved ramp until it was completely upside down, held on by a fan-powered suction system under the floor, then let go, fired its thrusters, rotated in mid-air and came back down on its wheels. In the second, it launched over a row of parked vehicles and a semi-truck and landed on the far side.</p>
+          <p>According to the company, the demo car used ten cold-gas thrusters fed from about 600 litres of compressed air stored in carbon-fibre-overwrapped pressure vessels, and the air tank can be refilled. Three versions were announced: a road-going Performance model, a Thrust model with rear thrusters for sub-one-second 0–60 mph runs, and an invite-only, single-seat Rocket model with thrusters around the whole body that Tesla says is not approved for public roads. All three are quoted at more than 230 mph and about 300 miles of range, with production planned for 2028.</p>
+          <p>Roadster Rocket turns those ideas into game mechanics: the suction loop, the vehicle-lineup jump, the limited air supply and the mid-air flip. The car in the game is our own low-poly interpretation of the angular white design, with its gold-tinted canopy, full-width light bars and hidden active wing.</p>
+          <p class="sources">Further reading: <a href="https://techcrunch.com/2026/10/15/tesla-reveals-spacex-powered-roadster-that-flies-and-falls-with-style/" rel="noopener" target="_blank">TechCrunch</a> · <a href="https://www.foxbusiness.com/technology/teslas-new-roadster-makes-flying-debut-hitting-60-mph-under-second" rel="noopener" target="_blank">Fox Business</a> · <a href="https://www.tesla.com/roadster" rel="noopener" target="_blank">Tesla Roadster page</a></p>
+        </section>
+
+        <section id="faq">
+          <h2>FAQ</h2>
+          <details open><summary>Is Roadster Rocket free?</summary><p>Yes. It runs in your browser with no download and no sign-up. The game is supported by ads on this page.</p></details>
+          <details><summary>Does it work on phones and tablets?</summary><p>Yes. Touch screens get on-screen steer, THRUST and FLIP buttons. Turn your phone sideways for the widest view, and use the fullscreen button in the corner of the game.</p></details>
+          <details><summary>Is this an official Tesla game?</summary><p>No. Roadster Rocket is an unofficial fan game inspired by the public 2026 Roadster reveal. It is not affiliated with, sponsored by or endorsed by Tesla, Inc. or SpaceX.</p></details>
+          <details><summary>How do I unlock new paint colours?</summary><p>Collect Mach diamonds during runs. They are banked as credits that you can spend in the Garage on paints such as Midnight Carbon, Rocket Red and Gold Glaze.</p></details>
+          <details><summary>Is my progress saved?</summary><p>Your best score, diamonds and paints are stored in your browser on this device. Clearing site data resets them.</p></details>
+          <details><summary>The game is slow on my device. What can I do?</summary><p>The game lowers its own graphics quality if it detects a low frame rate. Closing other tabs and using the latest Chrome, Safari, Edge or Firefox also helps.</p></details>
+        </section>
+      </article>
+    </main>
+
+    <footer class="site-footer">
+      <nav aria-label="Site">
+        <a href="/about">About</a>
+        <a href="/privacy">Privacy policy</a>
+        <a href="/terms">Terms</a>
+        <a href="/contact">Contact</a>
+      </nav>
+      <p class="disclaimer">Roadster Rocket is an unofficial fan game and is not affiliated with Tesla, Inc. or SpaceX. "Tesla" and "Roadster" are trademarks of their respective owners and are used here only to describe the inspiration for the game.</p>
+      <p class="copy">© <span id="year">2026</span> Roadster Rocket · Made by <a href="https://goshudigital.com" rel="noopener" target="_blank">Goshu Digital</a></p>
+    </footer>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
