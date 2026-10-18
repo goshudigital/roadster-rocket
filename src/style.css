@@ -424,6 +424,8 @@ details p { margin: 10px 0 2px; }
 .site-footer { border-top: 1px solid var(--line); padding: 28px 20px 40px; text-align: center; color: var(--muted); font-size: 13px; }
 .site-footer nav { display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; margin-bottom: 12px; }
 .site-footer nav a { color: var(--text); text-decoration: none; }
+.linklike { appearance: none; background: none; border: 0; padding: 0; font: inherit; color: var(--text); cursor: pointer; }
+.linklike:hover, .site-footer nav a:hover { text-decoration: underline; }
 .disclaimer { max-width: 760px; margin: 0 auto 8px; }
 .copy a { color: var(--muted); }
 
