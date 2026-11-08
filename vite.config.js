@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig, loadEnv } from 'vite';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
-const PAGES = ['index', 'about', 'privacy', 'terms', 'contact'];
+const PAGES = ['index', 'guide', 'stunts', 'track', 'garage', 'physics', 'updates', 'about', 'privacy', 'terms', 'contact'];
 
 /**
  * Injects the AdSense tags (only when a valid publisher id is configured),
@@ -12,7 +12,7 @@ function siteMeta(env) {
   const client = (env.VITE_ADSENSE_CLIENT || '').trim();
   const adsOn = /^ca-pub-\d{10,20}$/.test(client);
   const siteUrl = (env.VITE_SITE_URL || 'https://roadsterrocket.vercel.app').replace(/\/$/, '');
-  const pages = ['/', '/about', '/privacy', '/terms', '/contact'];
+  const pages = ['/', '/guide', '/stunts', '/track', '/garage', '/physics', '/updates', '/about', '/privacy', '/terms', '/contact'];
 
   return {
     name: 'site-meta',

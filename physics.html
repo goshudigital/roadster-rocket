@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The physics behind the game | Roadster Rocket</title>
+    <meta name="description" content="How Roadster Rocket models cold-gas thrusters, suction downforce, gravity and the balancing act of landing level, and how each idea works in the real world." />
+    <link rel="canonical" href="%SITE_URL%/physics" />
+    <meta name="theme-color" content="#06070b" />
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="Roadster Rocket" />
+    <meta property="og:title" content="The physics behind the game | Roadster Rocket" />
+    <meta property="og:description" content="Cold-gas thrusters, suction downforce, arcade gravity and why landing level is so hard, in the game and in the real world." />
+    <meta property="og:url" content="%SITE_URL%/physics" />
+    <meta property="og:image" content="%SITE_URL%/img/og.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/src/style.css" />
+    <!--ADSENSE_HEAD-->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": "The physics behind Roadster Rocket",
+        "description": "Cold-gas thrusters, suction downforce, arcade gravity and why landing level is so hard, in the game and in the real world.",
+        "datePublished": "2026-11-08",
+        "dateModified": "2026-11-08",
+        "author": { "@type": "Organization", "name": "Goshu Digital", "url": "https://goshudigital.com" },
+        "publisher": { "@type": "Organization", "name": "Goshu Digital", "url": "https://goshudigital.com" },
+        "mainEntityOfPage": "%SITE_URL%/physics",
+        "image": "%SITE_URL%/img/og.jpg",
+        "about": { "@type": "VideoGame", "name": "Roadster Rocket", "url": "%SITE_URL%/" }
+      }
+    </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="Roadster Rocket home">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M3 21 L16 6 L29 21 L22 21 L16 14 L10 21 Z" fill="currentColor"/><rect x="6" y="24" width="20" height="2.2" rx="1.1" fill="#ff3347"/></svg>
+        <span>ROADSTER<b>ROCKET</b></span>
+      </a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="/">Play</a>
+        <a href="/guide">Guides</a>
+        <a href="/updates">Updates</a>
+        <a href="/about">About</a>
+        <a href="/contact">Contact</a>
+      </nav>
+    </header>
+    <main class="content">
+      <p class="crumbs"><a href="/">Home</a> › <a href="/guide">Guides</a> › The physics</p>
+      <h1>The physics behind Roadster Rocket</h1>
+      <p class="meta">Updated 8 November 2026 · 7 min read</p>
+      <p class="lede">Roadster Rocket is an arcade game, but it is built around a handful of real physical ideas: reaction thrust, suction downforce, a limited supply of stored gas and the stubbornness of a spinning object. Here is how each one works in the real world, and how the game models it.</p>
+
+      <h2 id="thrusters">Cold-gas thrusters</h2>
+      <p>A cold-gas thruster is the simplest kind of rocket. Gas stored under high pressure escapes through a nozzle, and pushing the gas out one way pushes the vehicle the other way: Newton's third law at work. Nothing burns, so cold-gas systems are simple, safe and can be switched on and off instantly. That is why spacecraft use them for small attitude adjustments, and why NASA's Manned Maneuvering Unit, the jetpack astronauts first flew untethered in 1984, ran on nitrogen cold-gas thrusters.</p>
+      <p>The catch is efficiency. Rocket engineers measure it as specific impulse, and nitrogen cold gas manages roughly 70 seconds, against about 450 seconds for an engine burning liquid hydrogen and oxygen. A cold-gas tank empties quickly for the thrust it gives. According to the company, the reveal's demo car carried ten cold-gas thrusters fed from about 600 litres of compressed air in carbon-fibre-overwrapped tanks.</p>
+      <p>In the game, holding THRUST gives the car an upward push of 46 m/s² against the game's gravity of 24 m/s², a net climb of about 22 m/s², or roughly 2.2 g. Vertical speed is capped at 13 m/s (about 29 mph), and the lift fades out between 36 and 49 ft, so the car cannot keep climbing. Launch control uses the rear jets to accelerate at about 3 g, which is why the car reaches 60 mph in roughly 0.9 seconds. Side jets roll the car for balance, and the flip jet rolls it left for kick flips.</p>
+
+      <h2 id="gravity">Gravity, tuned for arcade play</h2>
+      <p>Gravity in Roadster Rocket is 24 m/s², about 2.4 times Earth's 9.81 m/s². That is deliberate. At about 220 mph, a lineup ramp throws the car upward at more than 30 m/s. Under real gravity it would stay airborne for almost seven seconds and travel nearly 700 metres before landing. With the game's gravity the same jump lasts under three seconds and covers about 280 metres: long enough for a double kick flip, short enough to keep the course readable.</p>
+      <p>Heavier gravity also makes the thrusters matter. Let go of THRUST and the car drops quickly, which is exactly why the descent from The Ramp has to be flown on the jets.</p>
+
+      <h2 id="downforce">Suction and downforce</h2>
+      <p>Downforce is grip that comes from pressing the car into the road rather than from its weight. Wings and the underbody generate it from the airflow, which is why it grows with the square of speed. Fan cars take a shortcut: a fan pulls air out from under the car, lowering the pressure beneath it so the atmosphere pushes the car down, even at walking pace. The Chaparral 2J raced with this idea in the 1970 Can-Am series, and the Brabham BT46B won the 1978 Swedish Grand Prix with a fan before the team withdrew it. If the suction force is larger than the car's own weight, a car can in principle stay stuck to a wall or a ceiling, which is the idea behind the reveal's upside-down hang.</p>
+      <p>On the ground, the game's DOWNFORCE readout follows the same square law: 900 kg plus a term that grows with speed squared. That works out to about 1,750 kg at 100 mph and about 5,350 kg at 230 mph. On The Ramp the reading climbs from about 2,500 kg at the base to 4,700 kg at the top as the fans hold the car upside down. The number is there for flavour; in the game the suction simply holds the car to the curl until it lets go.</p>
+
+      <h2 id="air">The air budget</h2>
+      <p>The game keeps air simple. The tank holds 600 litres, thrust uses 72 litres a second and the tank refills at 24 litres a second whenever the wheels are on the ground. That is about 8 seconds of thrust per tank and 25 seconds to refill from empty. Canisters add 220 litres, about 3 seconds of thrust, and an eased descent from The Ramp uses roughly 300 litres.</p>
+      <p>Real compressed-gas systems are less tidy. A tank's capacity in litres is its volume, but how much gas is inside depends on the pressure it was filled to. Unless a regulator holds it steady, the pressure, and with it the thrust, falls as the gas is used. The game keeps the thrust constant until the tank is empty, so the AIR gauge always tells you exactly how much flying you have left.</p>
+
+      <h2 id="balance">Spin, balance and landing</h2>
+      <p>A spinning object keeps spinning until something stops it. That is conservation of angular momentum, and it is why a kick flip does not stop when you let go of the button. Holding a car level in mid-air is a little like balancing a broom on your palm: level is an unstable balance point, so any small tilt grows unless you correct it.</p>
+      <p>The game models roll the same way. A spin fades by only about 40% per second on its own, so you have to stop it with the opposite thruster. The flip jet pushes harder than the balancing jets, and stopping a full-speed spin of about 490° per second takes around 0.4 seconds. An instability term pushes the car further from level the more it tips, and random gusts nudge it, growing until they are more than twice as strong 6 km into a run. While the lift jets fire, the car is about a fifth steadier, and during the slow descent from The Ramp it is steadier still.</p>
+      <p>Touchdown is judged on the angle: within 10° of level is Perfect, within 28° Clean and within 50° Sketchy. A car still spinning fast when it lands is marked down further. The <a href="/stunts#landing-grades">stunts guide</a> has the details.</p>
+
+      <h2 id="mach-diamonds">Why "Mach diamonds"?</h2>
+      <p>The collectibles are named after a real effect. When a jet or rocket exhaust leaves its nozzle at supersonic speed and its pressure does not match the surrounding air, it forms a repeating pattern of shock waves and expansion zones. In a hot exhaust the gas heats up where it is compressed and glows, producing a row of bright, evenly spaced spots known as Mach diamonds or shock diamonds. The game nods to them with three bright beads behind each rear nozzle during launch, and with the glowing cyan crystals you collect on the track.</p>
+
+      <h2 id="units">Units on the HUD</h2>
+      <p>Internally the game works in metres and seconds. The HUD converts speed to mph (1 m/s is about 2.24 mph) and altitude to feet (1 m is about 3.28 ft), while the distance on the run-over screen stays in metres.</p>
+
+      <aside class="more-guides" aria-labelledby="more-guides">
+        <h2 id="more-guides">More guides</h2>
+        <ul class="guide-cards">
+          <li><a href="/guide"><b>Beginner's guide</b><span>Controls, the HUD, the air tank and how to survive your first runs.</span></a></li>
+          <li><a href="/stunts"><b>Stunts and scoring</b><span>Exact points for every stunt, landing grades, The Ramp and chains.</span></a></li>
+          <li><a href="/track"><b>Track and obstacles</b><span>Every section of the course and how difficulty rises with distance.</span></a></li>
+          <li><a href="/garage"><b>Garage and paints</b><span>All eight paints, their prices and where to find the most diamonds.</span></a></li>
+          <li><a href="/updates"><b>Updates</b><span>Release notes for every update since launch.</span></a></li>
+        </ul>
+      </aside>
+    </main>
+    <footer class="site-footer">
+      <nav aria-label="Guides">
+        <a href="/guide">Beginner's guide</a>
+        <a href="/stunts">Stunts &amp; scoring</a>
+        <a href="/track">Track guide</a>
+        <a href="/garage">Garage &amp; paints</a>
+        <a href="/physics">The physics</a>
+        <a href="/updates">Updates</a>
+      </nav>
+      <nav aria-label="Site">
+        <a href="/">Play</a>
+        <a href="/about">About</a>
+        <a href="/privacy">Privacy policy</a>
+        <a href="/terms">Terms</a>
+        <a href="/contact">Contact</a>
+        <button type="button" class="linklike" data-consent-settings>Privacy &amp; cookie settings</button>
+      </nav>
+      <p class="disclaimer">Roadster Rocket is an unofficial fan game and is not affiliated with Tesla, Inc. or SpaceX. "Tesla" and "Roadster" are trademarks of their respective owners and are used here only to describe the inspiration for the game.</p>
+      <p class="copy">© 2026 Roadster Rocket · Made by <a href="https://goshudigital.com" rel="noopener" target="_blank">Goshu Digital</a></p>
+    </footer>
+    <script type="module" src="/src/site.js"></script>
+  </body>
+</html>
